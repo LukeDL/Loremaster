@@ -12,7 +12,90 @@ body.map-body { height: 100dvh; overflow: hidden; }
   display: grid;
   grid-template-columns: 280px 1fr;
   min-height: 0;
+  transition: grid-template-columns 0.2s ease;
 }
+.workspace.has-now-playing {
+  grid-template-columns: 280px 1fr 340px;
+}
+
+.now-playing-panel {
+  border-left: 1px solid var(--border);
+  background: var(--panel);
+  overflow-y: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.now-playing-panel .np-header {
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.now-playing-panel .np-header h2 {
+  margin: 0 0 2px;
+  font-size: 15px;
+  font-weight: 600;
+}
+.now-playing-panel .np-header .prev {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.layer-live {
+  padding: 8px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.layer-live .layer-live-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.layer-live .layer-live-head .state {
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 9px;
+}
+.layer-live .layer-live-head .state.fading_in { background: rgba(210, 153, 34, 0.2); color: var(--warning); }
+.layer-live .layer-live-head .state.playing { background: rgba(63, 185, 80, 0.2); color: var(--success); }
+.layer-live .layer-live-head .state.fading_out { background: rgba(248, 81, 73, 0.2); color: var(--danger); }
+.layer-live .waveform-live {
+  min-height: 48px;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.np-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: auto;
+}
+.np-actions button {
+  padding: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  color: var(--text);
+  font-family: inherit;
+  cursor: pointer;
+}
+.np-actions button.end-combat {
+  background: var(--danger-strong);
+  border-color: var(--danger);
+  font-size: 16px;
+  padding: 16px;
+}
+.np-actions button.end-combat:hover { background: var(--danger); }
 
 .palette {
   border-right: 1px solid var(--border);
@@ -223,6 +306,46 @@ body.map-body { height: 100dvh; overflow: hidden; }
 .vue-flow__minimap {
   background: rgba(22, 27, 34, 0.85) !important;
   border: 1px solid var(--border) !important;
+}
+
+/* Loop region editor (waveform + draggable region) */
+.loop-editor {
+  margin-top: 8px;
+  padding: 8px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.loop-editor .waveform {
+  min-height: 72px;
+  border-radius: 4px;
+  overflow: hidden;
+}
+.loop-editor-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  flex-wrap: wrap;
+}
+.loop-editor-actions button {
+  padding: 4px 10px;
+  font-size: 12px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-family: inherit;
+  cursor: pointer;
+}
+.loop-editor-actions button:hover:not(:disabled) { border-color: var(--accent); }
+.loop-editor-actions button:disabled { opacity: 0.5; cursor: not-allowed; }
+.loop-editor-actions button.danger { color: var(--danger); }
+.loop-editor-actions button.danger:hover { border-color: var(--danger); }
+.loop-editor-actions .loop-hint {
+  color: var(--muted);
+  font-size: 11px;
+  margin-left: 4px;
 }
 
 /* Modal (scene create/edit) */

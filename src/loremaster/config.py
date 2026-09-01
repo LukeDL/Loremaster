@@ -6,11 +6,17 @@ from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# Anchor the default data dir to the project root (three parents up from this
+# file: src/loremaster/config.py -> project root), NOT the current working
+# directory. Running uvicorn from any subfolder used to silently create a
+# stray data/ next to the cwd; this keeps everyone pointed at the same place.
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="LOREMASTER_", env_file=".env")
 
-    data_dir: Path = Path("data")
+    data_dir: Path = _PROJECT_ROOT / "data"
     host: str = "0.0.0.0"
     port: int = 8765
     sample_rate: int = 48_000

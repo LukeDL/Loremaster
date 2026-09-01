@@ -65,6 +65,8 @@ class SceneService:
                         volume=layer.volume,
                         fade_in_ms=layer.fade_in_ms,
                         fade_out_ms=layer.fade_out_ms,
+                        loop_start_ms=layer.loop_start_ms,
+                        loop_end_ms=layer.loop_end_ms,
                     )
                 )
         on_end = OnEnd(

@@ -2,11 +2,13 @@
 // Vue 3 + Vue Flow via import map (see map.html).
 // Palette (left) lists every scene; canvas (right) shows only opt-in ones.
 
-import { createApp, ref, computed, onMounted, onBeforeUnmount, watch, defineComponent, h, markRaw, nextTick } from "vue";
+import { createApp, ref, computed, onMounted, onBeforeUnmount, watch, defineComponent, h, markRaw, nextTick, reactive } from "vue";
 import { VueFlow, Handle, Position, useVueFlow } from "@vue-flow/core";
 import { Background } from "@vue-flow/background";
 import { Controls } from "@vue-flow/controls";
 import { MiniMap } from "@vue-flow/minimap";
+import WaveSurfer from "wavesurfer.js";
+import RegionsPlugin from "wavesurfer.js/plugins/regions.esm.js";
 
 // ---- API -------------------------------------------------------------------
 
@@ -108,6 +110,278 @@ const SceneNode = defineComponent({
   },
 });
 
+// ---- Live layer view (display-only waveform + moving playhead) ------------
+
+const LayerLiveView = defineComponent({
+  name: "LayerLiveView",
+  props: {
+    audioFileId: { type: String, required: true },
+    label: { type: String, default: "" },
+    layerState: { type: String, default: "idle" },
+    positionMs: { type: Number, default: 0 },
+    loopStartMs: { type: Number, default: null },
+    loopEndMs: { type: Number, default: null },
+  },
+  setup(props) {
+    const containerRef = ref(null);
+    // Track the last authoritative position + when it landed, then
+    // interpolate at ~30fps so the cursor moves smoothly between WS pings.
+    let ws = null;
+    let regionsPlugin = null;
+    let loopRegion = null;
+    let interpTimer = null;
+    let lastPositionMs = props.positionMs;
+    let lastUpdateAt = performance.now();
+    let isReady = false;
+
+    onMounted(() => {
+      regionsPlugin = RegionsPlugin.create();
+      ws = WaveSurfer.create({
+        container: containerRef.value,
+        waveColor: "#6c757d",
+        progressColor: "#58a6ff",
+        cursorColor: "#f85149",
+        cursorWidth: 2,
+        height: 48,
+        barWidth: 1,
+        barGap: 1,
+        interact: false,
+        url: `/api/uploads/${props.audioFileId}/download`,
+        plugins: [regionsPlugin],
+      });
+      ws.on("ready", () => {
+        isReady = true;
+        if (props.loopStartMs != null && props.loopEndMs != null) {
+          loopRegion = regionsPlugin.addRegion({
+            start: props.loopStartMs / 1000,
+            end: props.loopEndMs / 1000,
+            color: "rgba(88, 166, 255, 0.15)",
+            drag: false,
+            resize: false,
+          });
+        }
+        // Prime the interpolator with whatever position we've already been given
+        lastPositionMs = props.positionMs;
+        lastUpdateAt = performance.now();
+        interpTimer = setInterval(() => {
+          if (!ws || !isReady) return;
+          const dur = ws.getDuration();
+          if (!dur) return;
+          // "playing" state -> extrapolate forward; other states -> stay put.
+          let effective = lastPositionMs;
+          if (props.layerState === "playing" || props.layerState === "fading_in") {
+            effective = lastPositionMs + (performance.now() - lastUpdateAt);
+          }
+          const sec = Math.min(effective / 1000, dur);
+          try { ws.setTime(sec); } catch (_) {}
+        }, 1000 / 30);
+      });
+    });
+
+    // Every time the WS ping brings a new position, reset the interpolator's
+    // anchor so we don't drift.
+    watch(() => props.positionMs, (newPos) => {
+      lastPositionMs = newPos;
+      lastUpdateAt = performance.now();
+    });
+
+    onBeforeUnmount(() => {
+      if (interpTimer) clearInterval(interpTimer);
+      if (ws) { try { ws.destroy(); } catch (_) {} ws = null; }
+    });
+
+    return { containerRef };
+  },
+  template: `
+    <div class="layer-live">
+      <div class="layer-live-head">
+        <span>{{ label }}</span>
+        <span class="state" :class="layerState">{{ layerState }}</span>
+      </div>
+      <div ref="containerRef" class="waveform-live"></div>
+    </div>
+  `,
+});
+
+
+// ---- Now Playing panel (right sidebar) ------------------------------------
+
+const NowPlayingPanel = defineComponent({
+  name: "NowPlayingPanel",
+  components: { LayerLiveView: markRaw(LayerLiveView) },
+  props: {
+    scene: { type: Object, required: true },
+    previousScene: { type: Object, default: null },
+    engineLayers: { type: Object, required: true },  // scene_id::layer_id -> snapshot
+  },
+  emits: ["stop", "end-combat"],
+  setup(props) {
+    // For each layer in the current scene, pull runtime info from engineLayers.
+    const rows = computed(() => props.scene.layers.map((layer, i) => {
+      const key = `${props.scene.id}::${layer.id}`;
+      const runtime = props.engineLayers[key] || {};
+      return {
+        key,
+        layerId: layer.id,
+        audioFileId: layer.audio_file_id,
+        label: `camada ${i + 1}`,
+        state: runtime.state || "idle",
+        positionMs: runtime.position_ms || 0,
+        loopStartMs: layer.loop_start_ms,
+        loopEndMs: layer.loop_end_ms,
+      };
+    }));
+    return { rows };
+  },
+  template: `
+    <div class="np-header">
+      <div class="section-title">tocando</div>
+      <h2>{{ scene.name }}</h2>
+      <div class="prev" v-if="previousScene">anterior: {{ previousScene.name }}</div>
+    </div>
+    <LayerLiveView
+      v-for="row in rows"
+      :key="row.key"
+      :audio-file-id="row.audioFileId"
+      :label="row.label"
+      :layer-state="row.state"
+      :position-ms="row.positionMs"
+      :loop-start-ms="row.loopStartMs"
+      :loop-end-ms="row.loopEndMs"
+    />
+    <div class="np-actions">
+      <button class="end-combat" @click="$emit('end-combat')">FIM DE COMBATE</button>
+      <button @click="$emit('stop')">■ parar</button>
+    </div>
+  `,
+});
+
+
+// ---- Loop region editor (waveform + draggable region) ---------------------
+
+const LoopRegionEditor = defineComponent({
+  name: "LoopRegionEditor",
+  props: {
+    audioFileId: { type: String, required: true },
+    loopStartMs: { type: Number, default: null },
+    loopEndMs: { type: Number, default: null },
+  },
+  emits: ["update"],
+  setup(props, { emit }) {
+    const containerRef = ref(null);
+    const isPlaying = ref(false);
+    const isReady = ref(false);
+    // Kept in raw JS closures — Vue reactivity would fight with wavesurfer's
+    // internal mutations and cause "maximum recursive updates" errors.
+    let ws = null;
+    let regionsPlugin = null;
+    let region = null;
+
+    const hasRegion = computed(
+      () => props.loopStartMs != null && props.loopEndMs != null,
+    );
+
+    const emitUpdate = (startSec, endSec) => {
+      emit("update", {
+        loop_start_ms: Math.round(startSec * 1000),
+        loop_end_ms: Math.round(endSec * 1000),
+      });
+    };
+
+    const attachRegion = (startSec, endSec) => {
+      if (region) region.remove();
+      region = regionsPlugin.addRegion({
+        start: startSec,
+        end: endSec,
+        color: "rgba(88, 166, 255, 0.25)",
+        drag: true,
+        resize: true,
+      });
+      // Wavesurfer fires "update-end" after the user finishes a drag/resize.
+      region.on("update-end", () => {
+        emitUpdate(region.start, region.end);
+      });
+    };
+
+    const createDefaultRegion = () => {
+      if (!ws || !isReady.value) return;
+      const d = ws.getDuration();
+      if (d <= 0) return;
+      // Middle 60% of the file is usually a decent starting point for a loop.
+      const start = d * 0.2;
+      const end = d * 0.8;
+      attachRegion(start, end);
+      emitUpdate(start, end);
+    };
+
+    const clearRegion = () => {
+      if (region) {
+        region.remove();
+        region = null;
+      }
+      emit("update", { loop_start_ms: null, loop_end_ms: null });
+    };
+
+    const togglePlay = () => {
+      if (!ws || !isReady.value) return;
+      ws.playPause();
+    };
+
+    onMounted(() => {
+      regionsPlugin = RegionsPlugin.create();
+      ws = WaveSurfer.create({
+        container: containerRef.value,
+        waveColor: "#8b949e",
+        progressColor: "#58a6ff",
+        cursorColor: "#f85149",
+        cursorWidth: 2,
+        height: 72,
+        barWidth: 2,
+        barGap: 1,
+        url: `/api/uploads/${props.audioFileId}/download`,
+        plugins: [regionsPlugin],
+      });
+      ws.on("ready", () => {
+        isReady.value = true;
+        if (hasRegion.value) {
+          attachRegion(props.loopStartMs / 1000, props.loopEndMs / 1000);
+        }
+      });
+      ws.on("play", () => (isPlaying.value = true));
+      ws.on("pause", () => (isPlaying.value = false));
+      ws.on("finish", () => (isPlaying.value = false));
+    });
+
+    onBeforeUnmount(() => {
+      if (ws) {
+        try { ws.destroy(); } catch (_) {}
+        ws = null;
+      }
+    });
+
+    return { containerRef, isPlaying, isReady, hasRegion, togglePlay, createDefaultRegion, clearRegion };
+  },
+  template: `
+    <div class="loop-editor">
+      <div ref="containerRef" class="waveform"></div>
+      <div class="loop-editor-actions">
+        <button type="button" @click="togglePlay" :disabled="!isReady">
+          {{ isPlaying ? '⏸ pausar' : '▶ preview' }}
+        </button>
+        <button type="button" @click="createDefaultRegion" v-if="!hasRegion" :disabled="!isReady">
+          + região de loop
+        </button>
+        <button type="button" class="danger" @click="clearRegion" v-else>
+          remover região
+        </button>
+        <span class="loop-hint" v-if="hasRegion">
+          arraste as bordas ou o centro da faixa azul pra ajustar
+        </span>
+      </div>
+    </div>
+  `,
+});
+
 // ---- Modal (create/edit scene) ---------------------------------------------
 
 const SceneModal = defineComponent({
@@ -129,9 +403,26 @@ const SceneModal = defineComponent({
         volume: 0.8,
         fade_in_ms: 500,
         fade_out_ms: 500,
+        loop_start_ms: null,
+        loop_end_ms: null,
       });
     };
     const removeLayer = (i) => layers.value.splice(i, 1);
+    const setLoopRegion = (i, { loop_start_ms, loop_end_ms }) => {
+      layers.value[i].loop_start_ms = loop_start_ms;
+      layers.value[i].loop_end_ms = loop_end_ms;
+    };
+    // When the user changes the audio file for a layer, previous loop markers
+    // don't apply to the new waveform — clear them so wavesurfer re-mounts
+    // fresh (component key uses audio_file_id).
+    const onAudioFileChange = (i, newId) => {
+      const layer = layers.value[i];
+      if (layer.audio_file_id !== newId) {
+        layer.audio_file_id = newId;
+        layer.loop_start_ms = null;
+        layer.loop_end_ms = null;
+      }
+    };
 
     const canSave = computed(() =>
       name.value.trim().length > 0 && layers.value.every((l) => l.audio_file_id)
@@ -165,7 +456,7 @@ const SceneModal = defineComponent({
             h("label", "arquivo"),
             h("select", {
               value: layer.audio_file_id,
-              onChange: (e) => { layer.audio_file_id = e.target.value; },
+              onChange: (e) => onAudioFileChange(i, e.target.value),
             }, props.uploads.map((f) => h("option", { value: f.id }, f.original_name))),
           ]),
           h("div", { class: "form-field" }, [
@@ -182,6 +473,17 @@ const SceneModal = defineComponent({
             }),
             " loop",
           ]),
+          // Waveform + region editor. Key on audio_file_id so switching
+          // files remounts wavesurfer with the new source.
+          layer.audio_file_id
+            ? h(LoopRegionEditor, {
+                key: layer.audio_file_id,
+                audioFileId: layer.audio_file_id,
+                loopStartMs: layer.loop_start_ms,
+                loopEndMs: layer.loop_end_ms,
+                onUpdate: (payload) => setLoopRegion(i, payload),
+              })
+            : null,
         ])),
         h("button", {
           style: "width: 100%; margin-top: 8px; padding: 10px; background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; color: var(--text); cursor: pointer;",
@@ -213,11 +515,18 @@ const App = defineComponent({
     Controls: markRaw(Controls),
     MiniMap: markRaw(MiniMap),
     SceneModal,
+    NowPlayingPanel: markRaw(NowPlayingPanel),
   },
   setup() {
     const scenes = ref([]);
     const uploads = ref([]);
-    const state = ref({ current_scene_id: null, master_volume: 1.0, xrun_count: 0 });
+    const state = ref({
+      current_scene_id: null,
+      previous_scene_id: null,
+      master_volume: 1.0,
+      layers: {},
+      xrun_count: 0,
+    });
     const connected = ref(false);
     const modalOpen = ref(false);
     const modalScene = ref(null);
@@ -467,7 +776,9 @@ const App = defineComponent({
           if (msg.type === "state") {
             state.value = {
               current_scene_id: msg.current_scene_id,
+              previous_scene_id: msg.previous_scene_id,
               master_volume: msg.master_volume,
+              layers: msg.layers || {},
               xrun_count: msg.xrun_count,
             };
           }
@@ -486,9 +797,17 @@ const App = defineComponent({
       if (ws) ws.close();
     });
 
+    const currentScene = computed(() =>
+      scenes.value.find((s) => s.id === state.value.current_scene_id) || null
+    );
+    const previousScene = computed(() =>
+      scenes.value.find((s) => s.id === state.value.previous_scene_id) || null
+    );
+
     return {
       scenes, uploads, nodeTypes, connected, state,
       modalOpen, modalScene, paletteScenes, canvasRef,
+      currentScene, previousScene,
       onNodeDragStop, onConnect, onEdgesChange, onEdgesDelete, onEdgeClick, onNodesChange,
       addToMap, removeFromMap, openCreate, saveModal,
       onPaletteDragStart, onCanvasDragOver, onCanvasDrop,
@@ -508,13 +827,11 @@ const App = defineComponent({
           </span>
         </span>
         <button class="primary" @click="openCreate">+ nova cena</button>
-        <button class="danger" :disabled="!state.current_scene_id" @click="endCombat">FIM DE COMBATE</button>
-        <button :disabled="!state.current_scene_id" @click="stop">■ parar</button>
         <a href="/" style="color: var(--muted); font-size: 12px; text-decoration: none; margin-left: 8px;">↗ controle</a>
       </div>
     </div>
 
-    <div class="workspace">
+    <div class="workspace" :class="{ 'has-now-playing': !!currentScene }">
       <aside class="palette">
         <h2>cenas disponíveis</h2>
         <div v-if="paletteScenes.length === 0" class="empty">
@@ -571,6 +888,16 @@ const App = defineComponent({
           <MiniMap pannable zoomable :node-color="'#1f6feb'" :node-stroke-color="'#58a6ff'" />
         </VueFlow>
       </div>
+
+      <aside v-if="currentScene" class="now-playing-panel">
+        <NowPlayingPanel
+          :scene="currentScene"
+          :previous-scene="previousScene"
+          :engine-layers="state.layers || {}"
+          @stop="stop"
+          @end-combat="endCombat"
+        />
+      </aside>
     </div>
 
     <SceneModal
