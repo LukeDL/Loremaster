@@ -15,6 +15,7 @@ from loremaster.models.repository import (
     delete_scene,
     get_scene,
     list_scenes,
+    set_entry_scene,
     set_scene_on_map,
     update_scene,
     update_scene_position,
@@ -22,6 +23,9 @@ from loremaster.models.repository import (
 from loremaster.models.scene import OnEndPolicy, Scene, SceneCreate, SceneUpdate
 
 router = APIRouter(prefix="/api/scenes", tags=["scenes"])
+# Separate router for the singleton entry-scene resource: it doesn't hang off
+# a specific /scenes/{id}, so it gets its own prefix.
+singletons_router = APIRouter(prefix="/api", tags=["scenes"])
 
 
 class PositionPayload(BaseModel):
@@ -115,3 +119,20 @@ async def set_on_end(
     if scene is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "scene not found")
     return scene
+
+
+class EntrySceneBody(BaseModel):
+    scene_id: UUID | None = None
+
+
+@singletons_router.put("/entry_scene", status_code=status.HTTP_204_NO_CONTENT)
+async def set_entry(
+    payload: EntrySceneBody,
+    sess: AsyncSession = Depends(db_session),
+) -> None:
+    """Set the singleton campaign entry scene. Body {"scene_id": UUID | null}.
+    Passing null clears the current entry. Called when the mestre connects the
+    start node to a scene on the map (or removes that connection)."""
+    ok = await set_entry_scene(sess, payload.scene_id)
+    if not ok:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "scene not found")

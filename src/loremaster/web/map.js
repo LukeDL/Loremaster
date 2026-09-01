@@ -2,8 +2,8 @@
 // Vue 3 + Vue Flow via import map (see map.html).
 // Palette (left) lists every scene; canvas (right) shows only opt-in ones.
 
-import { createApp, ref, computed, onMounted, onBeforeUnmount, watch, defineComponent, h, markRaw, nextTick, reactive } from "vue";
-import { VueFlow, Handle, Position, useVueFlow } from "@vue-flow/core";
+import { createApp, ref, computed, onMounted, onBeforeUnmount, watch, defineComponent, h, markRaw, nextTick, reactive, Fragment } from "vue";
+import { VueFlow, Handle, Position, useVueFlow, BaseEdge, EdgeLabelRenderer, getSmoothStepPath } from "@vue-flow/core";
 import { Background } from "@vue-flow/background";
 import { Controls } from "@vue-flow/controls";
 import { MiniMap } from "@vue-flow/minimap";
@@ -54,6 +54,13 @@ const API = {
       body: JSON.stringify({ on_end }),
     });
   },
+  async setEntryScene(scene_id) {
+    return fetch("/api/entry_scene", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ scene_id }),
+    });
+  },
   async play(sceneId) {
     return fetch("/api/playback/play", {
       method: "POST",
@@ -68,7 +75,88 @@ const API = {
 
 const isCombatName = (name) => /combat|batalha|boss/i.test(name || "");
 
-// ---- Custom node component -------------------------------------------------
+// ---- Custom edge component -------------------------------------------------
+
+// Renders a smoothstep edge plus a foreignObject label chip with the edge's
+// text and an × button anchored to the midpoint. Clicking × calls data.onDelete.
+// One custom edge type covers all three flavors (goto/stop/start) — the label
+// text and delete callback come from data.
+const SceneEdge = defineComponent({
+  name: "SceneEdge",
+  props: {
+    id: { type: String, required: true },
+    sourceX: Number, sourceY: Number,
+    targetX: Number, targetY: Number,
+    sourcePosition: String, targetPosition: String,
+    markerEnd: [String, Object], style: Object,
+    data: { type: Object, default: () => ({}) },
+    animated: Boolean,
+  },
+  setup(props) {
+    const pathParts = computed(() => getSmoothStepPath({
+      sourceX: props.sourceX, sourceY: props.sourceY,
+      sourcePosition: props.sourcePosition,
+      targetX: props.targetX, targetY: props.targetY,
+      targetPosition: props.targetPosition,
+    }));
+    return () => {
+      const [path, labelX, labelY] = pathParts.value;
+      return h(Fragment, [
+        h(BaseEdge, {
+          id: props.id,
+          path,
+          markerEnd: props.markerEnd,
+          style: props.style,
+          "class": props.animated ? "animated" : "",
+        }),
+        h(EdgeLabelRenderer, {}, () => h("div", {
+          class: "edge-chip",
+          style: {
+            position: "absolute",
+            transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
+            pointerEvents: "all",
+          },
+        }, [
+          h("span", { class: "edge-chip-label" }, props.data.label || ""),
+          h("button", {
+            class: "edge-chip-delete",
+            title: "remover conexão",
+            onClick: (e) => { e.stopPropagation(); if (props.data.onDelete) props.data.onDelete(props.id); },
+          }, "×"),
+        ])),
+      ]);
+    };
+  },
+});
+
+// ---- Custom node components ------------------------------------------------
+
+// Stop node: singleton terminal. Any scene wired to it gets on_end: stop.
+// Only has an incoming handle (source-less by design).
+const StopNode = defineComponent({
+  name: "StopNode",
+  setup() {
+    return () => h("div", { class: "special-node stop-node" }, [
+      h(Handle, { type: "target", position: Position.Left }),
+      h("div", { class: "special-node-icon" }, "⏹"),
+      h("div", { class: "special-node-label" }, "fim"),
+    ]);
+  },
+});
+
+// Start node: singleton entry. Connecting start→scene marks that scene as
+// the campaign entry (is_entry=true), and only one scene has it at a time.
+// Source-only handle (no target — nothing "goes to" start).
+const StartNode = defineComponent({
+  name: "StartNode",
+  setup() {
+    return () => h("div", { class: "special-node start-node" }, [
+      h("div", { class: "special-node-icon" }, "▶"),
+      h("div", { class: "special-node-label" }, "início"),
+      h(Handle, { type: "source", position: Position.Right }),
+    ]);
+  },
+});
 
 const SceneNode = defineComponent({
   name: "SceneNode",
@@ -530,7 +618,29 @@ const App = defineComponent({
     const connected = ref(false);
     const modalOpen = ref(false);
     const modalScene = ref(null);
-    const nodeTypes = markRaw({ scene: SceneNode });
+    const nodeTypes = markRaw({ scene: SceneNode, stop: StopNode, start: StartNode });
+    const edgeTypes = markRaw({ "scene-edge": SceneEdge });
+
+    // Special (non-scene) nodes live on the map alongside scene nodes but
+    // aren't backed by rows in the scenes table. They must survive reconciliation.
+    const STOP_NODE_ID = "__stop__";
+    const START_NODE_ID = "__start__";
+    const SPECIAL_NODE_IDS = new Set([STOP_NODE_ID, START_NODE_ID]);
+
+    const loadPos = (key) => {
+      try {
+        const raw = localStorage.getItem(key);
+        if (!raw) return null;
+        const p = JSON.parse(raw);
+        if (typeof p.x !== "number" || typeof p.y !== "number") return null;
+        return p;
+      } catch (_) { return null; }
+    };
+    const savePos = (key, pos) => {
+      try { localStorage.setItem(key, JSON.stringify({ x: pos.x, y: pos.y })); } catch (_) {}
+    };
+    const STOP_POS_KEY = "loremaster-map-stop-position";
+    const START_POS_KEY = "loremaster-map-start-position";
 
     // Delegate node ownership to Vue Flow: we call addNodes/removeNodes/
     // updateNodeData and read positions back from `vfNodes`. This way Vue Flow
@@ -545,6 +655,26 @@ const App = defineComponent({
       removeEdges,
       project,
     } = useVueFlow();
+
+    // Viewport persistence: restoring what the mestre was looking at feels much
+    // better than fit-view snapping on every reload. localStorage is fine here
+    // since /map is single-user single-device (see ROADMAP note: "mouse-first no notebook").
+    const VIEWPORT_KEY = "loremaster-map-viewport";
+    const loadViewport = () => {
+      try {
+        const raw = localStorage.getItem(VIEWPORT_KEY);
+        if (!raw) return null;
+        const v = JSON.parse(raw);
+        if (typeof v.x !== "number" || typeof v.y !== "number" || typeof v.zoom !== "number") return null;
+        return v;
+      } catch (_) { return null; }
+    };
+    const storedViewport = loadViewport();
+    const defaultViewport = storedViewport || { x: 0, y: 0, zoom: 0.9 };
+    const shouldFitView = !storedViewport;
+    const onViewportChangeEnd = (v) => {
+      try { localStorage.setItem(VIEWPORT_KEY, JSON.stringify({ x: v.x, y: v.y, zoom: v.zoom })); } catch (_) {}
+    };
 
     const buildNodeData = (scene) => ({
       name: scene.name,
@@ -568,13 +698,14 @@ const App = defineComponent({
     //  - remove nodes whose scene left the map / was deleted
     //  - add nodes for scenes that just entered the map
     //  - refresh `data` on remaining nodes via `updateNodeData` (doesn't touch position)
+    //  - ensure special nodes (stop, start) are always present
     const reconcileNodes = () => {
       const onMap = scenes.value.filter((s) => s.is_on_map);
       const wantedIds = new Set(onMap.map((s) => s.id));
       const existingIds = new Set(vfNodes.value.map((n) => n.id));
 
       const toRemove = vfNodes.value
-        .filter((n) => !wantedIds.has(n.id))
+        .filter((n) => !SPECIAL_NODE_IDS.has(n.id) && !wantedIds.has(n.id))
         .map((n) => n.id);
       if (toRemove.length) removeNodes(toRemove);
 
@@ -594,23 +725,81 @@ const App = defineComponent({
       for (const s of onMap) {
         if (existingIds.has(s.id)) updateNodeData(s.id, buildNodeData(s));
       }
+
+      // Ensure the stop and start nodes are always on the canvas.
+      // Not deletable via Delete key — they're campaign-graph landmarks.
+      if (!existingIds.has(STOP_NODE_ID)) {
+        addNodes([{
+          id: STOP_NODE_ID,
+          type: "stop",
+          position: loadPos(STOP_POS_KEY) || { x: 900, y: 220 },
+          data: {},
+          deletable: false,
+          selectable: true,
+          draggable: true,
+        }]);
+      }
+      if (!existingIds.has(START_NODE_ID)) {
+        addNodes([{
+          id: START_NODE_ID,
+          type: "start",
+          position: loadPos(START_POS_KEY) || { x: -180, y: 220 },
+          data: {},
+          deletable: false,
+          selectable: true,
+          draggable: true,
+        }]);
+      }
     };
 
     // Compute what edges *should* exist based on scenes; we reconcile Vue Flow's
     // internal edges collection below (parallel to how nodes are handled).
-    const desiredEdges = computed(() =>
-      scenes.value
-        .filter((s) => s.is_on_map && s.on_end.type === "goto" && s.on_end.scene_id)
-        .filter((s) => scenes.value.some((t) => t.id === s.on_end.scene_id && t.is_on_map))
+    // Three kinds: goto (scene→scene), stop (scene→__stop__), start (__start__→scene).
+    // All render through the same SceneEdge component; the label + delete-callback
+    // travel in data so a click on the × can persist via the same path.
+    const buildEdgeData = (label) => ({ label, onDelete: deleteEdgeById });
+    const desiredEdges = computed(() => {
+      const onMap = scenes.value.filter((s) => s.is_on_map);
+      const gotoEdges = onMap
+        .filter((s) => s.on_end.type === "goto" && s.on_end.scene_id)
+        .filter((s) => onMap.some((t) => t.id === s.on_end.scene_id))
         .map((s) => ({
           id: `e-${s.id}`,
           source: s.id,
           target: s.on_end.scene_id,
-          label: "on_end",
-          type: "smoothstep",
+          type: "scene-edge",
+          data: buildEdgeData("on_end"),
           animated: s.id === state.value.current_scene_id,
-        }))
-    );
+        }));
+      const stopEdges = onMap
+        .filter((s) => s.on_end.type === "stop")
+        .map((s) => ({
+          id: `e-${s.id}`,
+          source: s.id,
+          target: STOP_NODE_ID,
+          type: "scene-edge",
+          data: buildEdgeData("fim"),
+          animated: s.id === state.value.current_scene_id,
+        }));
+      // Singleton start→entry_scene edge — at most one exists at a time.
+      const entryScene = onMap.find((s) => s.is_entry);
+      const startEdges = entryScene ? [{
+        id: "e-start",
+        source: START_NODE_ID,
+        target: entryScene.id,
+        type: "scene-edge",
+        data: buildEdgeData("início"),
+      }] : [];
+      return [...gotoEdges, ...stopEdges, ...startEdges];
+    });
+
+    // Called from the × chip on the edge itself. desiredEdges is authoritative,
+    // so look up there rather than in vfEdges (which may be mid-mutation).
+    const deleteEdgeById = async (edgeId) => {
+      const edge = desiredEdges.value.find((e) => e.id === edgeId);
+      selectedEdgeId.value = null;
+      if (edge) await persistEdgeRemoval(edge);
+    };
 
     const reconcileEdges = () => {
       const wanted = desiredEdges.value;
@@ -638,6 +827,10 @@ const App = defineComponent({
     // ---- Actions -----------------------------------------------------------
 
     const onNodeDragStop = ({ node }) => {
+      // Special nodes are client-only; persist their position in localStorage
+      // instead of hitting the scenes API.
+      if (node.id === STOP_NODE_ID) { savePos(STOP_POS_KEY, node.position); return; }
+      if (node.id === START_NODE_ID) { savePos(START_POS_KEY, node.position); return; }
       API.setPosition(node.id, node.position.x, node.position.y);
       // Also update the local scenes cache so a subsequent full refresh
       // doesn't yank the node back to the old spot.
@@ -646,45 +839,78 @@ const App = defineComponent({
     };
 
     const onConnect = async ({ source, target }) => {
-      await API.setOnEnd(source, { type: "goto", scene_id: target });
-      await refreshScenes();
-    };
-
-    const persistEdgeRemoval = async (sourceId) => {
-      await API.setOnEnd(sourceId, { type: "return_previous" });
-      await refreshScenes();
-    };
-
-    // Direct UI action: click on an edge -> confirm -> delete.
-    // The Delete-key path via Vue Flow's edgesDelete is fragile in the
-    // controlled-mode setup, so click-to-delete is the primary interaction.
-    const onEdgeClick = ({ edge }) => {
-      const target = scenes.value.find((s) => s.id === edge.target);
-      const source = scenes.value.find((s) => s.id === edge.source);
-      const label = source && target
-        ? `${source.name} → ${target.name}`
-        : "esta conexão";
-      if (confirm(`Remover a conexão ${label}?`)) {
-        persistEdgeRemoval(edge.source);
+      // Dragging FROM the start node marks the target scene as campaign entry.
+      if (source === START_NODE_ID) {
+        if (SPECIAL_NODE_IDS.has(target)) return;
+        await API.setEntryScene(target);
+        await refreshScenes();
+        return;
       }
+      // Otherwise source must be a scene (stop/start don't have source→other).
+      if (SPECIAL_NODE_IDS.has(source)) return;
+      if (target === STOP_NODE_ID) {
+        await API.setOnEnd(source, { type: "stop" });
+      } else if (!SPECIAL_NODE_IDS.has(target)) {
+        await API.setOnEnd(source, { type: "goto", scene_id: target });
+      }
+      await refreshScenes();
     };
 
-    // Keep these too, in case the Delete key ever starts firing —
-    // idempotent because persist just sets on_end to return_previous.
+    // Route edge deletion based on the edge's kind: goto/stop edges reset the
+    // source scene's on_end; start edges clear the entry scene singleton.
+    const persistEdgeRemoval = async (edge) => {
+      if (edge.source === START_NODE_ID) {
+        await API.setEntryScene(null);
+      } else {
+        await API.setOnEnd(edge.source, { type: "return_previous" });
+      }
+      await refreshScenes();
+    };
+
+    // Select-then-delete pattern: clicking an edge just selects it (Vue Flow
+    // already highlights .selected via CSS). The toolbar button (or Delete key)
+    // then removes the selected edge. Avoids a scary confirm() on every click.
+    const selectedEdgeId = ref(null);
+
+    const onEdgeClick = ({ edge }) => {
+      selectedEdgeId.value = edge.id;
+    };
+
+    const onPaneClick = () => { selectedEdgeId.value = null; };
+
+    const deleteSelectedEdge = async () => {
+      const id = selectedEdgeId.value;
+      if (!id) return;
+      // Look up in desiredEdges (source of truth from scenes) rather than vfEdges,
+      // which may have already been mutated if this fires from the keyboard path.
+      const edge = desiredEdges.value.find((e) => e.id === id)
+                || vfEdges.value.find((e) => e.id === id);
+      selectedEdgeId.value = null;
+      if (edge) await persistEdgeRemoval(edge);
+    };
+
+    // When Vue Flow's delete-key path removes an edge, vfEdges has already been
+    // mutated by the time this handler runs. Look up the edge in desiredEdges
+    // instead — it's computed from scenes (which hasn't changed yet), so the
+    // just-removed edge is still there for us to persist.
     const onEdgesChange = async (changes) => {
       for (const c of changes) {
-        if (c.type === "remove") await persistEdgeRemoval(c.id.replace(/^e-/, ""));
+        if (c.type === "remove") {
+          const edge = desiredEdges.value.find((e) => e.id === c.id);
+          if (edge) await persistEdgeRemoval(edge);
+        }
       }
     };
     const onEdgesDelete = async (deletedEdges) => {
-      for (const e of deletedEdges) await persistEdgeRemoval(e.source);
+      for (const e of deletedEdges) await persistEdgeRemoval(e);
     };
 
     // Delete key on a selected card fires nodesChange with type "remove"
     // (this Vue Flow version doesn't emit nodesDelete for the keyboard path).
     // Persist as setOnMap(false) so re-adding from the palette works cleanly.
+    // Special nodes (stop, start) are skipped — they aren't backed by a scene row.
     const onNodesChange = async (changes) => {
-      const removals = changes.filter((c) => c.type === "remove");
+      const removals = changes.filter((c) => c.type === "remove" && !SPECIAL_NODE_IDS.has(c.id));
       for (const c of removals) {
         await API.setOnMap(c.id, false);
       }
@@ -735,15 +961,23 @@ const App = defineComponent({
       event.dataTransfer.dropEffect = "move";
     };
 
+    // Approximate scene-node dimensions from map.css (min 200, max 260 wide;
+     // height grows with layer count but hovers around 110). Centering the drop
+     // under the cursor feels much better than the top-left default.
+    const NODE_HALF_W = 115;
+    const NODE_HALF_H = 55;
+
     const onCanvasDrop = async (event) => {
       event.preventDefault();
       const sceneId = event.dataTransfer.getData("application/x-loremaster-scene");
       if (!sceneId) return;
       const scene = scenes.value.find((s) => s.id === sceneId);
       if (!scene || scene.is_on_map) return;
-      // Convert screen coords to canvas coords using Vue Flow's projector
+      // Convert screen coords to canvas coords using Vue Flow's projector,
+      // then shift back by half the card size so the cursor ends up at the center.
       const rect = event.currentTarget.getBoundingClientRect();
-      const position = project({ x: event.clientX - rect.left, y: event.clientY - rect.top });
+      const projected = project({ x: event.clientX - rect.left, y: event.clientY - rect.top });
+      const position = { x: projected.x - NODE_HALF_W, y: projected.y - NODE_HALF_H };
       await API.setOnMap(sceneId, true, position);
       await refreshScenes();
     };
@@ -786,13 +1020,27 @@ const App = defineComponent({
       };
     };
 
+    // Delete/Backspace removes the currently selected edge. Guard against
+    // stealing keys when the user is typing in an input/textarea (modal).
+    const onKeyDown = (e) => {
+      if (e.key !== "Delete" && e.key !== "Backspace") return;
+      const tag = (e.target && e.target.tagName) || "";
+      if (tag === "INPUT" || tag === "TEXTAREA" || e.target?.isContentEditable) return;
+      if (selectedEdgeId.value) {
+        e.preventDefault();
+        deleteSelectedEdge();
+      }
+    };
+
     onMounted(async () => {
       connectWs();
+      window.addEventListener("keydown", onKeyDown);
       await Promise.all([refreshScenes(), refreshUploads()]);
       state.value = await API.initialState();
     });
 
     onBeforeUnmount(() => {
+      window.removeEventListener("keydown", onKeyDown);
       if (reconnectTimer) clearTimeout(reconnectTimer);
       if (ws) ws.close();
     });
@@ -805,11 +1053,12 @@ const App = defineComponent({
     );
 
     return {
-      scenes, uploads, nodeTypes, connected, state,
+      scenes, uploads, nodeTypes, edgeTypes, connected, state,
       modalOpen, modalScene, paletteScenes, canvasRef,
-      currentScene, previousScene,
-      onNodeDragStop, onConnect, onEdgesChange, onEdgesDelete, onEdgeClick, onNodesChange,
-      addToMap, removeFromMap, openCreate, saveModal,
+      currentScene, previousScene, selectedEdgeId,
+      defaultViewport, shouldFitView, onViewportChangeEnd,
+      onNodeDragStop, onConnect, onEdgesChange, onEdgesDelete, onEdgeClick, onPaneClick, onNodesChange,
+      addToMap, removeFromMap, openCreate, saveModal, deleteSelectedEdge,
       onPaletteDragStart, onCanvasDragOver, onCanvasDrop,
       stop: () => API.stop(),
       endCombat: () => API.endCombat(),
@@ -827,6 +1076,12 @@ const App = defineComponent({
           </span>
         </span>
         <button class="primary" @click="openCreate">+ nova cena</button>
+        <button
+          class="danger"
+          :disabled="!selectedEdgeId"
+          @click="deleteSelectedEdge"
+          :title="selectedEdgeId ? 'remover conexão selecionada (Del)' : 'selecione uma aresta pra remover'"
+        >× remover conexão</button>
         <a href="/" style="color: var(--muted); font-size: 12px; text-decoration: none; margin-left: 8px;">↗ controle</a>
       </div>
     </div>
@@ -869,19 +1124,22 @@ const App = defineComponent({
       >
         <VueFlow
           :node-types="nodeTypes"
-          :default-viewport="{ x: 0, y: 0, zoom: 0.9 }"
+          :edge-types="edgeTypes"
+          :default-viewport="defaultViewport"
           :min-zoom="0.3"
           :max-zoom="1.6"
           :snap-to-grid="true"
           :snap-grid="[16, 16]"
           :delete-key-code="['Delete', 'Backspace']"
-          fit-view-on-init
+          :fit-view-on-init="shouldFitView"
           @node-drag-stop="onNodeDragStop"
           @connect="onConnect"
           @edge-click="onEdgeClick"
+          @pane-click="onPaneClick"
           @edges-change="onEdgesChange"
           @edges-delete="onEdgesDelete"
           @nodes-change="onNodesChange"
+          @viewport-change-end="onViewportChangeEnd"
         >
           <Background :gap="16" :size="1" pattern-color="#30363d" />
           <Controls />

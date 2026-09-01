@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import ForeignKey, String, Text
+from sqlalchemy import ForeignKey, String, Text, text
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
     async_sessionmaker,
@@ -47,6 +47,9 @@ class SceneRow(Base):
     # Node position on the campaign graph — null means "place on next open slot"
     graph_x: Mapped[float | None] = mapped_column(default=None)
     graph_y: Mapped[float | None] = mapped_column(default=None)
+    # Singleton campaign entry scene. Enforced by the set_entry_scene helper,
+    # not by a DB constraint (SQLite makes partial unique indexes clunky).
+    is_entry: Mapped[bool] = mapped_column(default=False, server_default="0")
     created_at: Mapped[datetime]
     updated_at: Mapped[datetime]
 
@@ -85,6 +88,20 @@ class Database:
     async def create_all(self) -> None:
         async with self.engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+            await self._ensure_columns(conn)
+
+    async def _ensure_columns(self, conn) -> None:
+        """Idempotent ALTER TABLE ADD COLUMN for columns added after initial
+        release. Base.metadata.create_all only creates missing tables — it
+        never adds columns to existing ones (see ISSUES.md #2)."""
+        additions = [
+            ("scenes", "is_entry", "BOOLEAN NOT NULL DEFAULT 0"),
+        ]
+        for table, column, decl in additions:
+            result = await conn.execute(text(f"PRAGMA table_info({table})"))
+            existing = {row[1] for row in result}
+            if column not in existing:
+                await conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {decl}"))
 
     @asynccontextmanager
     async def session(self) -> AsyncIterator[AsyncSession]:

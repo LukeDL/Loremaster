@@ -67,6 +67,9 @@ class Scene(BaseModel):
     is_on_map: bool = False
     graph_x: float | None = None
     graph_y: float | None = None
+    # Singleton flag: at most one scene has is_entry=True at a time.
+    # Managed exclusively via PUT /api/entry_scene, not via SceneUpdate.
+    is_entry: bool = False
     created_at: datetime
     updated_at: datetime
 

@@ -6,7 +6,7 @@ import json
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -203,6 +203,7 @@ def _scene_row_to_pydantic(row: SceneRow) -> Scene:
         is_on_map=row.is_on_map,
         graph_x=row.graph_x,
         graph_y=row.graph_y,
+        is_entry=row.is_entry,
         layers=[
             LayerConfig(
                 id=UUID(layer.id),
@@ -233,6 +234,24 @@ async def update_scene_position(
     return True
 
 
+async def set_entry_scene(session: AsyncSession, scene_id: UUID | None) -> bool:
+    """Set the singleton campaign entry scene. Passing None clears it.
+    Returns False if scene_id was given but doesn't exist."""
+    if scene_id is not None:
+        exists = await session.get(SceneRow, str(scene_id))
+        if exists is None:
+            return False
+    # Clear all, then set the target — in a single commit so we never observe
+    # two entry scenes simultaneously.
+    await session.execute(update(SceneRow).values(is_entry=False))
+    if scene_id is not None:
+        await session.execute(
+            update(SceneRow).where(SceneRow.id == str(scene_id)).values(is_entry=True)
+        )
+    await session.commit()
+    return True
+
+
 async def set_scene_on_map(
     session: AsyncSession,
     scene_id: UUID,
@@ -246,12 +265,14 @@ async def set_scene_on_map(
     if position is not None:
         row.graph_x, row.graph_y = position
     if not on_map:
-        # Taking a scene off the map: reset placement AND its outgoing edge.
-        # Re-adding it later starts clean instead of resurrecting a stale link.
+        # Taking a scene off the map: reset placement, its outgoing edge, AND
+        # release the entry singleton if this was the entry scene. Re-adding
+        # it later starts clean instead of resurrecting a stale start-edge.
         # (Incoming edges from other scenes are left alone — we don't silently
         # rewrite unrelated scenes.)
         row.graph_x = None
         row.graph_y = None
         row.on_end_json = _on_end_to_json(OnEndReturnPrevious())
+        row.is_entry = False
     await session.commit()
     return True

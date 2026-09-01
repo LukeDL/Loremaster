@@ -85,6 +85,7 @@ def create_app() -> FastAPI:
 
     app.include_router(uploads.router)
     app.include_router(scenes.router)
+    app.include_router(scenes.singletons_router)
     app.include_router(playback.router)
     app.include_router(ws_router)
 

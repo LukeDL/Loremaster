@@ -299,9 +299,78 @@ body.map-body { height: 100dvh; overflow: hidden; }
   height: 12px;
 }
 
+/* Special (non-scene) nodes: start / stop terminals. Compact and iconographic
+   so they never compete visually with scene cards. */
+.special-node {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 999px;
+  background: var(--panel);
+  border: 2px solid var(--border);
+  color: var(--text);
+  font-size: 13px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  min-width: 90px;
+  justify-content: center;
+}
+.special-node .special-node-icon { font-size: 18px; line-height: 1; }
+.special-node .special-node-label {
+  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 0.8px;
+  color: var(--muted);
+}
+.special-node.stop-node { border-color: var(--danger); }
+.special-node.stop-node .special-node-icon { color: var(--danger); }
+.special-node.start-node { border-color: var(--success); }
+.special-node.start-node .special-node-icon { color: var(--success); }
+.vue-flow__node.selected .special-node {
+  box-shadow: 0 0 0 3px rgba(88, 166, 255, 0.4), 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
 .vue-flow__edge-path { stroke: var(--muted); stroke-width: 2; }
 .vue-flow__edge.selected .vue-flow__edge-path { stroke: var(--accent); }
 .vue-flow__edge-text { fill: var(--muted); font-size: 10px; }
+
+/* Interactive chip anchored to the midpoint of each edge — label + × button.
+   Uses EdgeLabelRenderer (portal into Vue Flow's absolute-positioned layer). */
+.edge-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px 2px 8px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 10px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+  white-space: nowrap;
+  user-select: none;
+}
+.edge-chip-label { line-height: 1; }
+.edge-chip-delete {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  line-height: 1;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 14px;
+  font-family: inherit;
+}
+.edge-chip-delete:hover { background: var(--danger-strong); color: var(--text); }
+.vue-flow__edge.selected .edge-chip { border-color: var(--accent); color: var(--text); }
 
 .vue-flow__minimap {
   background: rgba(22, 27, 34, 0.85) !important;
