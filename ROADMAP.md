@@ -34,7 +34,7 @@ nenhuma requisição sai pra domínio externo.
 
 ### Editor visual de cenas em node graph (state machine)
 
-**Status**: em desenvolvimento (M7, após M6).
+**Status**: concluído (M7). Disponível em `/map`.
 
 Cada cena vira um nó no canvas; a política `on_end` de cada cena vira uma
 aresta que aponta pra outra cena (ou pra `stop`). O mestre "desenha" o fluxo
@@ -42,6 +42,18 @@ da campanha e visualiza de bate-pronto o que vai acontecer quando apertar
 `FIM DE COMBATE` em qualquer cena. Roda no notebook (mouse-first) — não
 substitui a UI atual do tablet, que continua sendo a interface de execução
 durante a mesa.
+
+Recursos:
+
+- Cenas viram cards arrastáveis; posição persistida no banco.
+- Cenas com `on_end.goto` viram aresta card→card; `on_end.stop` vira aresta
+  pro node especial `⏹ fim`.
+- Node especial `▶ início` marca a cena de entrada da campanha via campo
+  `is_entry` (singleton, ao menos uma cena por vez).
+- Cada aresta tem chip flutuante com label + × pra remover; toolbar tem
+  botão redundante e Delete/Backspace também funcionam.
+- Viewport (pan/zoom) e posições dos nodes especiais persistem em
+  localStorage (mapa é single-user single-device).
 
 ### Módulos plugáveis via event bus
 
