@@ -1,5 +1,35 @@
 # Loremaster — Roadmap
 
+## Atualizando dependências frontend vendorizadas
+
+O app não usa CDN — todas as libs JS/CSS estão em `src/loremaster/web/vendor/`
+pra funcionar em mesas sem internet. Pra atualizar uma versão, baixe
+manualmente da fonte oficial e substitua:
+
+```bash
+cd src/loremaster/web/vendor
+# Vue (bundle IIFE pra /, e ESM pra /map)
+curl -sfLo vue.global.prod.js       'https://cdn.jsdelivr.net/npm/vue@<VER>/dist/vue.global.prod.js'
+curl -sfLo vue.esm-browser.prod.js  'https://cdn.jsdelivr.net/npm/vue@<VER>/dist/vue.esm-browser.prod.js'
+# Vue Flow (core + plugins). Os .mjs oficiais só importam "vue" e
+# "@vue-flow/core" (resolvidos pelo import map em map.html).
+curl -sfLo vue-flow-core.js         'https://cdn.jsdelivr.net/npm/@vue-flow/core@<VER>/dist/vue-flow-core.mjs'
+curl -sfLo vue-flow-background.js   'https://cdn.jsdelivr.net/npm/@vue-flow/background@<VER>/dist/vue-flow-background.mjs'
+curl -sfLo vue-flow-controls.js     'https://cdn.jsdelivr.net/npm/@vue-flow/controls@<VER>/dist/vue-flow-controls.mjs'
+curl -sfLo vue-flow-minimap.js      'https://cdn.jsdelivr.net/npm/@vue-flow/minimap@<VER>/dist/vue-flow-minimap.mjs'
+# CSS
+curl -sfLo vue-flow-core.css         'https://cdn.jsdelivr.net/npm/@vue-flow/core@<VER>/dist/style.css'
+curl -sfLo vue-flow-theme-default.css 'https://cdn.jsdelivr.net/npm/@vue-flow/core@<VER>/dist/theme-default.css'
+curl -sfLo vue-flow-controls.css     'https://cdn.jsdelivr.net/npm/@vue-flow/controls@<VER>/dist/style.css'
+curl -sfLo vue-flow-minimap.css      'https://cdn.jsdelivr.net/npm/@vue-flow/minimap@<VER>/dist/style.css'
+# wavesurfer.js (usado pelo editor de loop region)
+curl -sfLo wavesurfer.esm.js         'https://cdn.jsdelivr.net/npm/wavesurfer.js@<VER>/dist/wavesurfer.esm.js'
+curl -sfLo wavesurfer-regions.esm.js 'https://cdn.jsdelivr.net/npm/wavesurfer.js@<VER>/dist/plugins/regions.esm.js'
+```
+
+Depois abrir `/` e `/map` no browser, verificar no DevTools > Network que
+nenhuma requisição sai pra domínio externo.
+
 ## Fora do MVP, planejado
 
 ### Editor visual de cenas em node graph (state machine)
