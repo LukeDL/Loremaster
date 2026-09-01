@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0d1117" />
+    <title>Loremaster — mapa de campanha</title>
+    <link rel="stylesheet" href="/style.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@vue-flow/core@1.42.5/dist/style.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@vue-flow/core@1.42.5/dist/theme-default.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@vue-flow/controls@1.1.2/dist/style.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@vue-flow/minimap@1.5.3/dist/style.css" />
+    <link rel="stylesheet" href="/map.css" />
+    <script type="importmap">
+    {
+      "imports": {
+        "vue": "https://cdn.jsdelivr.net/npm/vue@3.5.13/dist/vue.esm-browser.prod.js",
+        "@vue-flow/core": "https://esm.sh/@vue-flow/core@1.42.5?external=vue",
+        "@vue-flow/background": "https://esm.sh/@vue-flow/background@1.3.2?external=vue,@vue-flow/core",
+        "@vue-flow/controls": "https://esm.sh/@vue-flow/controls@1.1.2?external=vue,@vue-flow/core",
+        "@vue-flow/minimap": "https://esm.sh/@vue-flow/minimap@1.5.3?external=vue,@vue-flow/core"
+      }
+    }
+    </script>
+  </head>
+  <body class="map-body">
+    <div id="app"></div>
+    <script src="/map.js" type="module"></script>
+  </body>
+</html>

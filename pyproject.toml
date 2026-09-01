@@ -1,0 +1,36 @@
+[project]
+name = "loremaster"
+version = "0.1.0"
+description = "Add your description here"
+authors = [
+    { name = "LukeDL", email = "lucas.dleite@hotmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "aiosqlite>=0.22.1",
+    "fastapi>=0.141.1",
+    "numpy>=2.5.2",
+    "pydantic>=2.13.5",
+    "pydantic-settings>=2.15.0",
+    "python-multipart>=0.0.32",
+    "qrcode>=8.2",
+    "sounddevice>=0.5.6",
+    "soundfile>=0.14.0",
+    "sqlalchemy>=2.0.52",
+    "uvicorn[standard]>=0.52.4",
+    "zeroconf>=0.151.3",
+]
+
+[project.scripts]
+loremaster = "loremaster:main"
+
+[build-system]
+requires = ["uv_build>=0.12.7,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+]
