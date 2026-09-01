@@ -68,6 +68,8 @@ class LayerRow(Base):
     volume: Mapped[float]
     fade_in_ms: Mapped[int]
     fade_out_ms: Mapped[int]
+    loop_start_ms: Mapped[int | None] = mapped_column(default=None)
+    loop_end_ms: Mapped[int | None] = mapped_column(default=None)
 
     scene: Mapped["SceneRow"] = relationship(back_populates="layers")
     audio_file: Mapped["AudioFileRow"] = relationship(back_populates="layers")

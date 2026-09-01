@@ -40,7 +40,13 @@ class AudioFile(BaseModel):
 
 
 class LayerConfig(BaseModel):
-    """One layer within a scene — references an AudioFile by id."""
+    """One layer within a scene — references an AudioFile by id.
+
+    Loop region (Skyrim/Wwise style, optional): when both loop_start_ms and
+    loop_end_ms are set, playback loops between them; everything before
+    loop_start_ms is an intro (plays once), everything after loop_end_ms is
+    a tail that plays when the scene's on_end fires.
+    """
 
     id: UUID = Field(default_factory=uuid4)
     audio_file_id: UUID
@@ -48,6 +54,8 @@ class LayerConfig(BaseModel):
     volume: float = Field(default=1.0, ge=0.0, le=1.0)
     fade_in_ms: int = Field(default=500, ge=0, le=60_000)
     fade_out_ms: int = Field(default=500, ge=0, le=60_000)
+    loop_start_ms: int | None = Field(default=None, ge=0)
+    loop_end_ms: int | None = Field(default=None, ge=0)
 
 
 class Scene(BaseModel):

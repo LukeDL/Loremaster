@@ -8,6 +8,7 @@ from uuid import UUID, uuid4
 
 import soundfile as sf
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, status
+from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from loremaster.api.deps import db_session
@@ -63,6 +64,22 @@ async def upload_audio(
 @router.get("", response_model=list[AudioFile])
 async def list_uploads(sess: AsyncSession = Depends(db_session)) -> list[AudioFile]:
     return await list_audio_files(sess)
+
+
+@router.get("/{file_id}/download")
+async def download_upload(
+    file_id: UUID,
+    sess: AsyncSession = Depends(db_session),
+) -> FileResponse:
+    """Serve the raw audio file — used by the browser waveform editor
+    (wavesurfer.js) to decode and render peaks."""
+    audio = await get_audio_file(sess, file_id)
+    if audio is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "audio file not found")
+    path = settings.audio_dir / audio.path
+    if not path.exists():
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "audio file missing on disk")
+    return FileResponse(path, filename=audio.original_name)
 
 
 @router.delete("/{file_id}", status_code=status.HTTP_204_NO_CONTENT)

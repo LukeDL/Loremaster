@@ -37,11 +37,13 @@ class FakeEngine:
     def start(self) -> None: ...
     def stop(self) -> None: ...
 
-    def play_layer(self, layer_id, spec) -> None:
+    def play_layer(self, layer_id, spec, on_ended=None) -> None:
         self.played.append(layer_id)
 
     def fade_out_layer(self, layer_id) -> None:
         self.faded_out.append(layer_id)
+
+    def exit_layer_loop(self, layer_id) -> None: ...
 
     def set_layer_volume(self, layer_id, volume) -> None: ...
 

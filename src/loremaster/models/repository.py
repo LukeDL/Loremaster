@@ -189,6 +189,8 @@ def _layer_config_to_row(layer: LayerConfig, scene_id: UUID, position: int) -> L
         volume=layer.volume,
         fade_in_ms=layer.fade_in_ms,
         fade_out_ms=layer.fade_out_ms,
+        loop_start_ms=layer.loop_start_ms,
+        loop_end_ms=layer.loop_end_ms,
     )
 
 
@@ -209,6 +211,8 @@ def _scene_row_to_pydantic(row: SceneRow) -> Scene:
                 volume=layer.volume,
                 fade_in_ms=layer.fade_in_ms,
                 fade_out_ms=layer.fade_out_ms,
+                loop_start_ms=layer.loop_start_ms,
+                loop_end_ms=layer.loop_end_ms,
             )
             for layer in row.layers
         ],

@@ -45,10 +45,16 @@ class _Cmd:
 class _CmdAddLayer(_Cmd):
     layer_id: str
     spec: LayerSpec
+    on_ended: Callable[[str], None] | None = None
 
 
 @dataclass
 class _CmdFadeOutLayer(_Cmd):
+    layer_id: str
+
+
+@dataclass
+class _CmdExitLoop(_Cmd):
     layer_id: str
 
 
@@ -123,11 +129,23 @@ class AudioEngine:
 
     # ---- Public API (thread-safe: enqueue only) -----------------------------
 
-    def play_layer(self, layer_id: str, spec: LayerSpec) -> None:
-        self._command_queue.put(_CmdAddLayer(layer_id=layer_id, spec=spec))
+    def play_layer(
+        self,
+        layer_id: str,
+        spec: LayerSpec,
+        on_ended: Callable[[str], None] | None = None,
+    ) -> None:
+        """Add a layer. `on_ended` fires from the audio thread when the layer
+        finishes naturally (e.g. after a tail played out following exit_loop)."""
+        self._command_queue.put(_CmdAddLayer(layer_id=layer_id, spec=spec, on_ended=on_ended))
 
     def fade_out_layer(self, layer_id: str) -> None:
         self._command_queue.put(_CmdFadeOutLayer(layer_id=layer_id))
+
+    def exit_layer_loop(self, layer_id: str) -> None:
+        """Ask the layer to stop looping; when its cursor next hits loop_end,
+        it will continue to EOF (playing the tail) and then end."""
+        self._command_queue.put(_CmdExitLoop(layer_id=layer_id))
 
     def set_layer_volume(self, layer_id: str, volume: float) -> None:
         self._command_queue.put(_CmdSetLayerVolume(layer_id=layer_id, volume=volume))
@@ -202,11 +220,15 @@ class AudioEngine:
                 self._layers[cmd.layer_id].begin_fade_out(self.sample_rate)
                 # Rename to keep both alive during the crossfade
                 self._layers[f"{cmd.layer_id}__old_{id(cmd)}"] = self._layers.pop(cmd.layer_id)
-            self._layers[cmd.layer_id] = Layer.start(cmd.spec, self.sample_rate)
+            self._layers[cmd.layer_id] = Layer.start(cmd.spec, self.sample_rate, on_ended=cmd.on_ended)
         elif isinstance(cmd, _CmdFadeOutLayer):
             layer = self._layers.get(cmd.layer_id)
             if layer is not None:
                 layer.begin_fade_out(self.sample_rate)
+        elif isinstance(cmd, _CmdExitLoop):
+            layer = self._layers.get(cmd.layer_id)
+            if layer is not None:
+                layer.request_exit_loop()
         elif isinstance(cmd, _CmdSetLayerVolume):
             layer = self._layers.get(cmd.layer_id)
             if layer is not None:
