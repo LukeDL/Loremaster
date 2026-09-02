@@ -485,3 +485,43 @@ nav.tabs button:hover:not(.active) {
   float: right;
   cursor: pointer;
 }
+
+/* Waveform editor (intro / loop / tail regions) — shared across / and /map. */
+.loop-editor {
+  margin-top: 8px;
+  padding: 8px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.loop-editor .waveform {
+  min-height: 72px;
+  border-radius: 4px;
+  overflow: hidden;
+}
+.loop-editor-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  flex-wrap: wrap;
+}
+.loop-editor-actions button {
+  padding: 4px 10px;
+  font-size: 12px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-family: inherit;
+  cursor: pointer;
+}
+.loop-editor-actions button:hover:not(:disabled) { border-color: var(--accent); }
+.loop-editor-actions button:disabled { opacity: 0.5; cursor: not-allowed; }
+.loop-editor-actions button.danger { color: var(--danger); }
+.loop-editor-actions button.danger:hover { border-color: var(--danger); }
+.loop-editor-actions .loop-hint {
+  color: var(--muted);
+  font-size: 11px;
+  margin-left: 4px;
+}

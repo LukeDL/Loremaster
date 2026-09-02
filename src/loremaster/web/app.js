@@ -1,8 +1,9 @@
-// Loremaster control panel — Vue 3 (CDN, no build step)
+// Loremaster control panel — Vue 3 (ESM via import map, no build step).
 // Three views: Scenes (play), Uploads (audio files), Editor (create/edit scenes).
 // The footer with FIM DE COMBATE / stop / master volume is visible on every view.
 
-const { createApp, ref, computed, onMounted, onBeforeUnmount, watch, reactive } = Vue;
+import { createApp, ref, computed, onMounted, onBeforeUnmount, watch, reactive, markRaw } from "vue";
+import { LoopRegionEditor } from "/waveform-editor.js";
 
 // ---- API ---------------------------------------------------------------------
 
@@ -345,7 +346,7 @@ const EditorView = {
     const form = reactive({
       name: "",
       description: "",
-      layers: [],  // [{audio_file_id, loop, volume, fade_in_ms, fade_out_ms}]
+      layers: [],  // [{audio_file_id, loop, volume, fade_in_ms, fade_out_ms, loop_start_ms, loop_end_ms}]
       on_end: { type: "return_previous" },  // or {type:"goto", scene_id} or {type:"stop"}
     });
     const saving = ref(false);
@@ -359,11 +360,14 @@ const EditorView = {
         form.name = scene.name;
         form.description = scene.description || "";
         form.layers = scene.layers.map((l) => ({
+          id: l.id,
           audio_file_id: l.audio_file_id,
           loop: l.loop,
           volume: l.volume,
           fade_in_ms: l.fade_in_ms,
           fade_out_ms: l.fade_out_ms,
+          loop_start_ms: l.loop_start_ms ?? null,
+          loop_end_ms: l.loop_end_ms ?? null,
         }));
         form.on_end = { ...scene.on_end };
       } else {
@@ -385,10 +389,28 @@ const EditorView = {
         volume: 0.8,
         fade_in_ms: 500,
         fade_out_ms: 500,
+        loop_start_ms: null,
+        loop_end_ms: null,
       });
     };
 
     const removeLayer = (i) => { form.layers.splice(i, 1); };
+
+    // Switching audio files invalidates the loop markers (they were positions
+    // in a different waveform). Clearing forces the waveform editor to remount.
+    const onAudioFileChange = (i, newId) => {
+      const layer = form.layers[i];
+      if (layer.audio_file_id !== newId) {
+        layer.audio_file_id = newId;
+        layer.loop_start_ms = null;
+        layer.loop_end_ms = null;
+      }
+    };
+
+    const setLoopRegion = (i, { loop_start_ms, loop_end_ms }) => {
+      form.layers[i].loop_start_ms = loop_start_ms;
+      form.layers[i].loop_end_ms = loop_end_ms;
+    };
 
     const setOnEndType = (t) => {
       if (t === "return_previous") form.on_end = { type: "return_previous" };
@@ -429,9 +451,11 @@ const EditorView = {
 
     return {
       store, form, saving, isEditing,
-      addLayer, removeLayer, setOnEndType, save, goto, canSave, otherScenes,
+      addLayer, removeLayer, onAudioFileChange, setLoopRegion,
+      setOnEndType, save, goto, canSave, otherScenes,
     };
   },
+  components: { LoopRegionEditor: markRaw(LoopRegionEditor) },
   template: `
     <div>
       <div class="header-actions">
@@ -481,7 +505,7 @@ const EditorView = {
         </div>
         <div class="form-field">
           <label>arquivo</label>
-          <select v-model="layer.audio_file_id">
+          <select :value="layer.audio_file_id" @change="onAudioFileChange(i, $event.target.value)">
             <option v-for="f in store.uploads" :key="f.id" :value="f.id">{{ f.original_name }}</option>
           </select>
         </div>
@@ -505,6 +529,14 @@ const EditorView = {
           <input type="checkbox" v-model="layer.loop" />
           loop (necessário para trilhas contínuas)
         </label>
+        <LoopRegionEditor
+          v-if="layer.audio_file_id"
+          :key="layer.audio_file_id"
+          :audio-file-id="layer.audio_file_id"
+          :loop-start-ms="layer.loop_start_ms"
+          :loop-end-ms="layer.loop_end_ms"
+          @update="setLoopRegion(i, $event)"
+        />
       </div>
 
       <button @click="addLayer" :disabled="store.uploads.length === 0"

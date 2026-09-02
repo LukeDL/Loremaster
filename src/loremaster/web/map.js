@@ -9,6 +9,7 @@ import { Controls } from "@vue-flow/controls";
 import { MiniMap } from "@vue-flow/minimap";
 import WaveSurfer from "wavesurfer.js";
 import RegionsPlugin from "wavesurfer.js/plugins/regions.esm.js";
+import { LoopRegionEditor } from "/waveform-editor.js";
 
 // ---- API -------------------------------------------------------------------
 
@@ -345,132 +346,8 @@ const NowPlayingPanel = defineComponent({
 });
 
 
-// ---- Loop region editor (waveform + draggable region) ---------------------
-
-const LoopRegionEditor = defineComponent({
-  name: "LoopRegionEditor",
-  props: {
-    audioFileId: { type: String, required: true },
-    loopStartMs: { type: Number, default: null },
-    loopEndMs: { type: Number, default: null },
-  },
-  emits: ["update"],
-  setup(props, { emit }) {
-    const containerRef = ref(null);
-    const isPlaying = ref(false);
-    const isReady = ref(false);
-    // Kept in raw JS closures — Vue reactivity would fight with wavesurfer's
-    // internal mutations and cause "maximum recursive updates" errors.
-    let ws = null;
-    let regionsPlugin = null;
-    let region = null;
-
-    const hasRegion = computed(
-      () => props.loopStartMs != null && props.loopEndMs != null,
-    );
-
-    const emitUpdate = (startSec, endSec) => {
-      emit("update", {
-        loop_start_ms: Math.round(startSec * 1000),
-        loop_end_ms: Math.round(endSec * 1000),
-      });
-    };
-
-    const attachRegion = (startSec, endSec) => {
-      if (region) region.remove();
-      region = regionsPlugin.addRegion({
-        start: startSec,
-        end: endSec,
-        color: "rgba(88, 166, 255, 0.25)",
-        drag: true,
-        resize: true,
-      });
-      // Wavesurfer fires "update-end" after the user finishes a drag/resize.
-      region.on("update-end", () => {
-        emitUpdate(region.start, region.end);
-      });
-    };
-
-    const createDefaultRegion = () => {
-      if (!ws || !isReady.value) return;
-      const d = ws.getDuration();
-      if (d <= 0) return;
-      // Middle 60% of the file is usually a decent starting point for a loop.
-      const start = d * 0.2;
-      const end = d * 0.8;
-      attachRegion(start, end);
-      emitUpdate(start, end);
-    };
-
-    const clearRegion = () => {
-      if (region) {
-        region.remove();
-        region = null;
-      }
-      emit("update", { loop_start_ms: null, loop_end_ms: null });
-    };
-
-    const togglePlay = () => {
-      if (!ws || !isReady.value) return;
-      ws.playPause();
-    };
-
-    onMounted(() => {
-      regionsPlugin = RegionsPlugin.create();
-      ws = WaveSurfer.create({
-        container: containerRef.value,
-        waveColor: "#8b949e",
-        progressColor: "#58a6ff",
-        cursorColor: "#f85149",
-        cursorWidth: 2,
-        height: 72,
-        barWidth: 2,
-        barGap: 1,
-        url: `/api/uploads/${props.audioFileId}/download`,
-        plugins: [regionsPlugin],
-      });
-      ws.on("ready", () => {
-        isReady.value = true;
-        if (hasRegion.value) {
-          attachRegion(props.loopStartMs / 1000, props.loopEndMs / 1000);
-        }
-      });
-      ws.on("play", () => (isPlaying.value = true));
-      ws.on("pause", () => (isPlaying.value = false));
-      ws.on("finish", () => (isPlaying.value = false));
-    });
-
-    onBeforeUnmount(() => {
-      if (ws) {
-        try { ws.destroy(); } catch (_) {}
-        ws = null;
-      }
-    });
-
-    return { containerRef, isPlaying, isReady, hasRegion, togglePlay, createDefaultRegion, clearRegion };
-  },
-  template: `
-    <div class="loop-editor">
-      <div ref="containerRef" class="waveform"></div>
-      <div class="loop-editor-actions">
-        <button type="button" @click="togglePlay" :disabled="!isReady">
-          {{ isPlaying ? '⏸ pausar' : '▶ preview' }}
-        </button>
-        <button type="button" @click="createDefaultRegion" v-if="!hasRegion" :disabled="!isReady">
-          + região de loop
-        </button>
-        <button type="button" class="danger" @click="clearRegion" v-else>
-          remover região
-        </button>
-        <span class="loop-hint" v-if="hasRegion">
-          arraste as bordas ou o centro da faixa azul pra ajustar
-        </span>
-      </div>
-    </div>
-  `,
-});
-
 // ---- Modal (create/edit scene) ---------------------------------------------
+// LoopRegionEditor is imported from waveform-editor.js (shared with /).
 
 const SceneModal = defineComponent({
   name: "SceneModal",
