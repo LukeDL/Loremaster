@@ -69,6 +69,7 @@ class LayerRow(Base):
     position: Mapped[int]  # ordering within scene
     loop: Mapped[bool]
     volume: Mapped[float]
+    pan_lr: Mapped[float] = mapped_column(default=0.0, server_default="0.0")
     fade_in_ms: Mapped[int]
     fade_out_ms: Mapped[int]
     loop_start_ms: Mapped[int | None] = mapped_column(default=None)
@@ -96,6 +97,7 @@ class Database:
         never adds columns to existing ones (see ISSUES.md #2)."""
         additions = [
             ("scenes", "is_entry", "BOOLEAN NOT NULL DEFAULT 0"),
+            ("layers", "pan_lr", "REAL NOT NULL DEFAULT 0.0"),
         ]
         for table, column, decl in additions:
             result = await conn.execute(text(f"PRAGMA table_info({table})"))

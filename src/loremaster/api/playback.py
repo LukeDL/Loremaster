@@ -23,6 +23,14 @@ class VolumeRequest(BaseModel):
     volume: float = Field(ge=0.0, le=1.0)
 
 
+class LayerPatchRequest(BaseModel):
+    """Fields left as None are not modified. Bare `id` (unscoped) — the service
+    scopes it to the current scene."""
+
+    volume: float | None = Field(default=None, ge=0.0, le=1.0)
+    pan_lr: float | None = Field(default=None, ge=-1.0, le=1.0)
+
+
 @router.post("/play", status_code=status.HTTP_202_ACCEPTED)
 async def play(
     payload: PlayRequest,
@@ -55,6 +63,19 @@ async def volume(
         service.set_master_volume(payload.volume)
     else:
         service.set_layer_volume(payload.target, payload.volume)
+    return {"status": "ok"}
+
+
+@router.patch("/layers/{layer_id}", status_code=status.HTTP_202_ACCEPTED)
+async def patch_layer(
+    layer_id: str,
+    payload: LayerPatchRequest,
+    service: SceneService = Depends(get_scene_service),
+) -> dict[str, str]:
+    if payload.volume is not None:
+        service.set_layer_volume(layer_id, payload.volume)
+    if payload.pan_lr is not None:
+        service.set_layer_pan(layer_id, payload.pan_lr)
     return {"status": "ok"}
 
 

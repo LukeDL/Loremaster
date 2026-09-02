@@ -19,6 +19,7 @@ If the markers are missing, the layer either loops the whole buffer
 
 from __future__ import annotations
 
+import math
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
@@ -26,6 +27,18 @@ from enum import Enum
 import numpy as np
 
 from loremaster.audio.crossfade import equal_power_in, equal_power_out
+
+
+def _pan_to_gains(pan: float) -> tuple[float, float]:
+    """Equal-power stereo pan. pan in [-1, 1]. Returns (L_gain, R_gain).
+
+    pan=-1 → (1.0, 0.0) — hard left
+    pan= 0 → (~0.707, ~0.707) — center, -3dB per channel (constant total power)
+    pan=+1 → (0.0, 1.0) — hard right
+    """
+    p = max(-1.0, min(1.0, pan))
+    theta = (p + 1.0) * math.pi / 4.0
+    return math.cos(theta), math.sin(theta)
 
 
 class LayerState(Enum):
@@ -43,6 +56,7 @@ class LayerSpec:
     data: np.ndarray  # shape (n, 2), float32, engine sample rate
     loop: bool = True
     volume: float = 1.0
+    pan_lr: float = 0.0  # -1 = full L, 0 = center, +1 = full R
     fade_in_ms: int = 500
     fade_out_ms: int = 500
     loop_start_ms: int | None = None
@@ -59,6 +73,7 @@ class Layer:
     _fade_env: np.ndarray | None = None
     _fade_pos: int = 0
     _base_volume: float = field(init=False)
+    _pan_gains: np.ndarray = field(init=False)  # shape (2,), float32
     _loop_start_frame: int | None = None  # inclusive
     _loop_end_frame: int | None = None    # exclusive
     _exit_loop_requested: bool = False
@@ -66,6 +81,8 @@ class Layer:
 
     def __post_init__(self) -> None:
         self._base_volume = self.spec.volume
+        l, r = _pan_to_gains(self.spec.pan_lr)
+        self._pan_gains = np.array([l, r], dtype=np.float32)
 
     @classmethod
     def start(
@@ -142,11 +159,11 @@ class Layer:
                 elif self.state == LayerState.FADING_OUT:
                     if take < frames:
                         gain[take:] = 0.0
-                    out += buf * gain[:, None]
+                    out += buf * gain[:, None] * self._pan_gains[None, :]
                     self._mark_ended()
                     return False
 
-        out += buf * gain[:, None]
+        out += buf * gain[:, None] * self._pan_gains[None, :]
 
         # If this read consumed the last available frames (EOF and no more
         # wrapping possible), end the layer now instead of waiting for the
@@ -230,6 +247,13 @@ class Layer:
         """Immediate volume change. Called at block boundary via engine command."""
         self._base_volume = max(0.0, min(1.0, volume))
         self.spec.volume = self._base_volume
+
+    def set_pan(self, pan_lr: float) -> None:
+        """Immediate pan change. Called at block boundary via engine command."""
+        clamped = max(-1.0, min(1.0, pan_lr))
+        self.spec.pan_lr = clamped
+        l, r = _pan_to_gains(clamped)
+        self._pan_gains = np.array([l, r], dtype=np.float32)
 
     def position_ms(self, sample_rate: int) -> int:
         return int(self.cursor * 1000 / sample_rate)

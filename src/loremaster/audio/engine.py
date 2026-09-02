@@ -65,6 +65,12 @@ class _CmdSetLayerVolume(_Cmd):
 
 
 @dataclass
+class _CmdSetLayerPan(_Cmd):
+    layer_id: str
+    pan_lr: float
+
+
+@dataclass
 class _CmdSetMasterVolume(_Cmd):
     volume: float
 
@@ -150,6 +156,9 @@ class AudioEngine:
     def set_layer_volume(self, layer_id: str, volume: float) -> None:
         self._command_queue.put(_CmdSetLayerVolume(layer_id=layer_id, volume=volume))
 
+    def set_layer_pan(self, layer_id: str, pan_lr: float) -> None:
+        self._command_queue.put(_CmdSetLayerPan(layer_id=layer_id, pan_lr=pan_lr))
+
     def set_master_volume(self, volume: float) -> None:
         self._command_queue.put(_CmdSetMasterVolume(volume=volume))
 
@@ -233,6 +242,10 @@ class AudioEngine:
             layer = self._layers.get(cmd.layer_id)
             if layer is not None:
                 layer.set_volume(cmd.volume)
+        elif isinstance(cmd, _CmdSetLayerPan):
+            layer = self._layers.get(cmd.layer_id)
+            if layer is not None:
+                layer.set_pan(cmd.pan_lr)
         elif isinstance(cmd, _CmdSetMasterVolume):
             self._master_volume = max(0.0, min(1.0, cmd.volume))
         elif isinstance(cmd, _CmdStopAll):
@@ -246,6 +259,7 @@ class AudioEngine:
                 "state": layer.state.value,
                 "position_ms": layer.position_ms(self.sample_rate),
                 "volume": layer.spec.volume,
+                "pan_lr": layer.spec.pan_lr,
                 "loop": layer.spec.loop,
             }
             for lid, layer in self._layers.items()

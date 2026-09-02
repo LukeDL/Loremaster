@@ -52,6 +52,8 @@ class LayerConfig(BaseModel):
     audio_file_id: UUID
     loop: bool = True
     volume: float = Field(default=1.0, ge=0.0, le=1.0)
+    # Stereo pan: -1 = full left, 0 = center, +1 = full right. Equal-power law.
+    pan_lr: float = Field(default=0.0, ge=-1.0, le=1.0)
     fade_in_ms: int = Field(default=500, ge=0, le=60_000)
     fade_out_ms: int = Field(default=500, ge=0, le=60_000)
     loop_start_ms: int | None = Field(default=None, ge=0)

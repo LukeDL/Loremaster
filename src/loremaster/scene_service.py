@@ -63,6 +63,7 @@ class SceneService:
                         data=loaded.data,
                         loop=layer.loop,
                         volume=layer.volume,
+                        pan_lr=layer.pan_lr,
                         fade_in_ms=layer.fade_in_ms,
                         fade_out_ms=layer.fade_out_ms,
                         loop_start_ms=layer.loop_start_ms,
@@ -135,6 +136,14 @@ class SceneService:
         # Layer ids are scoped by scene in the engine
         self.engine.set_layer_volume(f"{current.id}::{layer_id}", volume)
         self.bus.publish(VolumeChanged(target=layer_id, volume=volume))
+
+    def set_layer_pan(self, layer_id: str, pan_lr: float) -> None:
+        current = self.player.current_scene
+        if current is None:
+            return
+        # No dedicated bus event — pan changes propagate via the periodic
+        # PlaybackStateSnapshot (layers[layer_id].pan_lr).
+        self.engine.set_layer_pan(f"{current.id}::{layer_id}", pan_lr)
 
     # ---- State snapshot ------------------------------------------------------
 
