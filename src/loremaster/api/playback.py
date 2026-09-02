@@ -48,9 +48,9 @@ async def stop(service: SceneService = Depends(get_scene_service)) -> dict[str, 
     return {"status": "stopping"}
 
 
-@router.post("/end_combat", status_code=status.HTTP_202_ACCEPTED)
-async def end_combat(service: SceneService = Depends(get_scene_service)) -> dict[str, str]:
-    await service.end_combat()
+@router.post("/end_scene", status_code=status.HTTP_202_ACCEPTED)
+async def end_scene(service: SceneService = Depends(get_scene_service)) -> dict[str, str]:
+    await service.end_scene()
     return {"status": "on_end_triggered"}
 
 

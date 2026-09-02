@@ -1,4 +1,4 @@
-"""End-to-end API tests: upload -> create scene -> play -> end_combat -> stop.
+"""End-to-end API tests: upload -> create scene -> play -> end_scene -> stop.
 
 We swap the real AudioEngine for a fake one to avoid opening PortAudio.
 """
@@ -170,7 +170,7 @@ def test_create_scene_and_retrieve(client):
     assert fetched["id"] == scene["id"]
 
 
-def test_play_stop_end_combat_flow(client):
+def test_play_stop_end_scene_flow(client):
     audio_id = client.post("/api/uploads", files={"file": ("m.wav", _wav_bytes(), "audio/wav")}).json()["id"]
     exploration = client.post("/api/scenes", json={
         "name": "Exploration",
@@ -190,8 +190,8 @@ def test_play_stop_end_combat_flow(client):
     assert state["current_scene_id"] == combat["id"]
     assert state["previous_scene_id"] == exploration["id"]
 
-    # end_combat should trigger return_previous -> exploration becomes current again
-    assert client.post("/api/playback/end_combat").status_code == 202
+    # end_scene should trigger return_previous -> exploration becomes current again
+    assert client.post("/api/playback/end_scene").status_code == 202
     state = client.get("/api/playback/state").json()
     assert state["current_scene_id"] == exploration["id"]
 

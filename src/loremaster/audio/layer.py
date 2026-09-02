@@ -10,8 +10,9 @@ Skyrim/Wwise-style:
 
 - Frames ``[0, loop_start)`` play once (intro).
 - Frames ``[loop_start, loop_end)`` loop.
-- When ``request_exit_loop()`` is called, the cursor stops wrapping at
-  loop_end and continues to EOF (tail), then the layer ends naturally.
+- Frames ``[loop_end, EOF)`` are the tail — reached by the engine's
+  jump-to-tail command (M14), which spawns a short crossfade to a fresh
+  Layer whose cursor starts at ``loop_end`` and plays to EOF.
 
 If the markers are missing, the layer either loops the whole buffer
 (``loop=True``) or plays once and ends (``loop=False``).
@@ -90,8 +91,9 @@ class Layer:
         spec: LayerSpec,
         sample_rate: int,
         on_ended: Callable[[str], None] | None = None,
+        start_frame: int = 0,
     ) -> "Layer":
-        layer = cls(spec=spec, _on_ended=on_ended)
+        layer = cls(spec=spec, cursor=max(0, start_frame), _on_ended=on_ended)
         if spec.loop_start_ms is not None and spec.loop_end_ms is not None:
             n = spec.data.shape[0]
             start = int(round(spec.loop_start_ms * sample_rate / 1000.0))
@@ -111,10 +113,13 @@ class Layer:
             layer.state = LayerState.PLAYING
         return layer
 
-    def begin_fade_out(self, sample_rate: int) -> None:
+    def begin_fade_out(self, sample_rate: int, fade_ms: int | None = None) -> None:
+        """Start a fade-out. `fade_ms` overrides `spec.fade_out_ms` — used for
+        the short crossfade during a jump-to-tail (M14)."""
         if self.state == LayerState.ENDED:
             return
-        n = int(round(self.spec.fade_out_ms * sample_rate / 1000.0))
+        duration_ms = fade_ms if fade_ms is not None else self.spec.fade_out_ms
+        n = int(round(duration_ms * sample_rate / 1000.0))
         if n <= 0:
             self._mark_ended()
             return
@@ -124,11 +129,20 @@ class Layer:
 
     def request_exit_loop(self) -> None:
         """Stop looping; when the cursor reaches loop_end, let it continue to
-        EOF instead of wrapping. Called from the engine command queue."""
+        EOF instead of wrapping. Called from the engine command queue.
+
+        Superseded by the M14 jump-to-tail behavior for FIM DA CENA, but kept
+        for programmatic use (e.g., tests exercising the linear exit path)."""
         self._exit_loop_requested = True
 
     def has_loop_region(self) -> bool:
         return self._loop_start_frame is not None and self._loop_end_frame is not None
+
+    @property
+    def tail_start_frame(self) -> int | None:
+        """The frame index where the tail begins (loop_end). None if the layer
+        has no loop region — nothing to jump to."""
+        return self._loop_end_frame
 
     def read(self, out: np.ndarray, frames: int) -> bool:
         """Mix `frames` samples of this layer into `out` (shape (frames, 2)).

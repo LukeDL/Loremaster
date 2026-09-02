@@ -1,8 +1,8 @@
 from loremaster.events.bus import EventBus
 from loremaster.events.types import (
-    CombatEnded,
     Event,
     PlaybackStateSnapshot,
+    SceneEnded,
     ScenePlaybackStarted,
     ScenePlaybackStopped,
     TransitionStarted,
@@ -10,10 +10,10 @@ from loremaster.events.types import (
 )
 
 __all__ = [
-    "CombatEnded",
     "Event",
     "EventBus",
     "PlaybackStateSnapshot",
+    "SceneEnded",
     "ScenePlaybackStarted",
     "ScenePlaybackStopped",
     "TransitionStarted",

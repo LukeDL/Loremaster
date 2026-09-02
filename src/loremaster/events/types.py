@@ -38,10 +38,12 @@ class TransitionStarted(_EventBase):
     to_scene_id: UUID
 
 
-class CombatEnded(_EventBase):
-    """Fired when the user triggers the "end combat" button on a scene."""
+class SceneEnded(_EventBase):
+    """Fired when the user triggers the "FIM DA CENA" button on a scene.
+    Applies the scene's on_end policy (return_previous / goto / stop),
+    playing the tail concurrently for layers with a loop region."""
 
-    type: Literal["combat_ended"] = "combat_ended"
+    type: Literal["scene_ended"] = "scene_ended"
     scene_id: UUID
 
 
@@ -66,7 +68,7 @@ Event = (
     ScenePlaybackStarted
     | ScenePlaybackStopped
     | TransitionStarted
-    | CombatEnded
+    | SceneEnded
     | VolumeChanged
     | PlaybackStateSnapshot
 )

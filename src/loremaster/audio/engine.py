@@ -59,6 +59,17 @@ class _CmdExitLoop(_Cmd):
 
 
 @dataclass
+class _CmdJumpToTail(_Cmd):
+    """Spawn a fresh Layer starting at loop_end (the tail) with a short
+    fade-in, and fade out the original layer over the same duration —
+    together they form a crossfade to the tail."""
+
+    layer_id: str
+    tail_layer_id: str
+    tail_fade_ms: int
+
+
+@dataclass
 class _CmdSetLayerVolume(_Cmd):
     layer_id: str
     volume: float
@@ -150,8 +161,28 @@ class AudioEngine:
 
     def exit_layer_loop(self, layer_id: str) -> None:
         """Ask the layer to stop looping; when its cursor next hits loop_end,
-        it will continue to EOF (playing the tail) and then end."""
+        it will continue to EOF (playing the tail) and then end.
+
+        Superseded by ``jump_to_tail`` for the FIM DA CENA flow, but kept
+        available for programmatic use."""
         self._command_queue.put(_CmdExitLoop(layer_id=layer_id))
+
+    def jump_to_tail(
+        self,
+        layer_id: str,
+        tail_layer_id: str,
+        tail_fade_ms: int = 300,
+    ) -> None:
+        """Jump immediately to the tail (loop_end -> EOF) via a short
+        crossfade. The engine spawns a new Layer (identified by
+        ``tail_layer_id``) whose cursor starts at ``loop_end`` and fades in
+        over ``tail_fade_ms``, while the original layer fades out over the
+        same duration. Layers without a loop region just fade out."""
+        self._command_queue.put(_CmdJumpToTail(
+            layer_id=layer_id,
+            tail_layer_id=tail_layer_id,
+            tail_fade_ms=tail_fade_ms,
+        ))
 
     def set_layer_volume(self, layer_id: str, volume: float) -> None:
         self._command_queue.put(_CmdSetLayerVolume(layer_id=layer_id, volume=volume))
@@ -238,6 +269,8 @@ class AudioEngine:
             layer = self._layers.get(cmd.layer_id)
             if layer is not None:
                 layer.request_exit_loop()
+        elif isinstance(cmd, _CmdJumpToTail):
+            self._apply_jump_to_tail(cmd)
         elif isinstance(cmd, _CmdSetLayerVolume):
             layer = self._layers.get(cmd.layer_id)
             if layer is not None:
@@ -251,6 +284,36 @@ class AudioEngine:
         elif isinstance(cmd, _CmdStopAll):
             for layer in self._layers.values():
                 layer.begin_fade_out(self.sample_rate)
+
+    def _apply_jump_to_tail(self, cmd: "_CmdJumpToTail") -> None:
+        layer = self._layers.get(cmd.layer_id)
+        if layer is None:
+            return
+        # No loop region -> nothing to jump to; just fade out normally.
+        if not layer.has_loop_region() or layer.tail_start_frame is None:
+            layer.begin_fade_out(self.sample_rate, fade_ms=cmd.tail_fade_ms)
+            return
+        # Spawn a fresh Layer at loop_end with a short fade-in.
+        original = layer.spec
+        tail_spec = LayerSpec(
+            id=cmd.tail_layer_id,
+            data=original.data,  # shared numpy buffer, cheap
+            loop=False,
+            volume=original.volume,
+            pan_lr=original.pan_lr,
+            fade_in_ms=cmd.tail_fade_ms,
+            fade_out_ms=original.fade_out_ms,
+            loop_start_ms=None,
+            loop_end_ms=None,
+        )
+        tail_layer = Layer.start(
+            tail_spec,
+            self.sample_rate,
+            start_frame=layer.tail_start_frame,
+        )
+        self._layers[cmd.tail_layer_id] = tail_layer
+        # Fade the original out over the same window so the two overlap.
+        layer.begin_fade_out(self.sample_rate, fade_ms=cmd.tail_fade_ms)
 
     def _publish_snapshot(self) -> None:
         # Build a small dict per layer — cheap even at callback rate.

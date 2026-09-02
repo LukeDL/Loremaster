@@ -70,7 +70,7 @@ const API = {
     });
   },
   async stop() { return fetch("/api/playback/stop", { method: "POST" }); },
-  async endCombat() { return fetch("/api/playback/end_combat", { method: "POST" }); },
+  async endScene() { return fetch("/api/playback/end_scene", { method: "POST" }); },
   async initialState() { return (await fetch("/api/playback/state")).json(); },
 };
 
@@ -303,7 +303,7 @@ const NowPlayingPanel = defineComponent({
     previousScene: { type: Object, default: null },
     engineLayers: { type: Object, required: true },  // scene_id::layer_id -> snapshot
   },
-  emits: ["stop", "end-combat"],
+  emits: ["stop", "end-scene"],
   setup(props) {
     // For each layer in the current scene, pull runtime info from engineLayers.
     const rows = computed(() => props.scene.layers.map((layer, i) => {
@@ -339,7 +339,7 @@ const NowPlayingPanel = defineComponent({
       :loop-end-ms="row.loopEndMs"
     />
     <div class="np-actions">
-      <button class="end-combat" @click="$emit('end-combat')">FIM DE COMBATE</button>
+      <button class="end-scene" @click="$emit('end-scene')">FIM DA CENA</button>
       <button @click="$emit('stop')">■ parar</button>
     </div>
   `,
@@ -938,7 +938,7 @@ const App = defineComponent({
       addToMap, removeFromMap, openCreate, saveModal, deleteSelectedEdge,
       onPaletteDragStart, onCanvasDragOver, onCanvasDrop,
       stop: () => API.stop(),
-      endCombat: () => API.endCombat(),
+      endScene: () => API.endScene(),
     };
   },
   template: `
@@ -1030,7 +1030,7 @@ const App = defineComponent({
           :previous-scene="previousScene"
           :engine-layers="state.layers || {}"
           @stop="stop"
-          @end-combat="endCombat"
+          @end-scene="endScene"
         />
       </aside>
     </div>

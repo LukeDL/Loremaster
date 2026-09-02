@@ -1,6 +1,6 @@
 // Loremaster control panel — Vue 3 (ESM via import map, no build step).
 // Three views: Scenes (play), Uploads (audio files), Editor (create/edit scenes).
-// The footer with FIM DE COMBATE / stop / master volume is visible on every view.
+// The footer with FIM DA CENA / stop / master volume is visible on every view.
 
 import { createApp, ref, computed, onMounted, onBeforeUnmount, watch, reactive, markRaw } from "vue";
 import { LoopRegionEditor } from "/waveform-editor.js";
@@ -40,7 +40,7 @@ const API = {
     });
   },
   async stop() { return fetch("/api/playback/stop", { method: "POST" }); },
-  async endCombat() { return fetch("/api/playback/end_combat", { method: "POST" }); },
+  async endScene() { return fetch("/api/playback/end_scene", { method: "POST" }); },
   async setVolume(target, volume) {
     return fetch("/api/playback/volume", {
       method: "POST",
@@ -476,7 +476,7 @@ const EditorView = {
       </div>
 
       <div class="form-field">
-        <label>ao encerrar (botão FIM DE COMBATE)</label>
+        <label>ao encerrar (botão FIM DA CENA)</label>
         <select :value="form.on_end.type" @change="setOnEndType($event.target.value)">
           <option value="return_previous">↩ voltar para a cena anterior</option>
           <option value="goto">→ ir para uma cena específica</option>
@@ -573,7 +573,7 @@ const App = {
     );
 
     const stopAll = async () => { await API.stop(); };
-    const endCombat = async () => { await API.endCombat(); };
+    const endScene = async () => { await API.endScene(); };
 
     onMounted(async () => {
       disconnectWs = connectWebSocket();
@@ -585,7 +585,7 @@ const App = {
       if (disconnectWs) disconnectWs();
     });
 
-    return { store, localMaster, currentScene, stopAll, endCombat, goto };
+    return { store, localMaster, currentScene, stopAll, endScene, goto };
   },
   template: `
     <header>
@@ -628,8 +628,8 @@ const App = {
       </div>
       <div class="footer-buttons">
         <button class="stop" :disabled="!currentScene" @click="stopAll">■ parar</button>
-        <button class="end-combat" :disabled="!currentScene" @click="endCombat">
-          FIM DE COMBATE
+        <button class="end-scene" :disabled="!currentScene" @click="endScene">
+          FIM DA CENA
         </button>
       </div>
     </footer>

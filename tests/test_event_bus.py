@@ -7,7 +7,7 @@ import asyncio
 import pytest
 
 from loremaster.events.bus import EventBus
-from loremaster.events.types import CombatEnded, ScenePlaybackStopped, VolumeChanged
+from loremaster.events.types import SceneEnded, ScenePlaybackStopped, VolumeChanged
 from uuid import uuid4
 
 
@@ -38,11 +38,11 @@ async def test_wildcard_subscriber_gets_everything():
 
     bus.subscribe_all(handle_all)
     bus.publish(VolumeChanged(target="master", volume=1.0))
-    bus.publish(CombatEnded(scene_id=uuid4()))
+    bus.publish(SceneEnded(scene_id=uuid4()))
 
     await asyncio.sleep(0.05)
     assert VolumeChanged in seen
-    assert CombatEnded in seen
+    assert SceneEnded in seen
 
 
 @pytest.mark.asyncio

@@ -167,7 +167,7 @@ input[type="range"] {
   margin-bottom: 8px;
 }
 
-/* Sticky footer with the big FIM DE COMBATE button */
+/* Sticky footer with the big FIM DA CENA button */
 footer {
   position: sticky;
   bottom: 0;
@@ -218,15 +218,15 @@ button.stop {
   background: var(--panel);
 }
 
-button.end-combat {
+button.end-scene {
   background: var(--danger-strong);
   border-color: var(--danger);
   font-size: 18px;
   letter-spacing: 0.5px;
   padding: 18px;
 }
-button.end-combat:hover { background: var(--danger); }
-button.end-combat:disabled { background: var(--panel); border-color: var(--border); }
+button.end-scene:hover { background: var(--danger); }
+button.end-scene:disabled { background: var(--panel); border-color: var(--border); }
 
 .empty-state {
   color: var(--muted);

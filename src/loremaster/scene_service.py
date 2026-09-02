@@ -16,8 +16,8 @@ from loremaster.audio.layer import LayerSpec
 from loremaster.audio.loader import AudioLoader
 from loremaster.audio.scene_player import OnEnd, ScenePlayer, SceneSpec
 from loremaster.events import (
-    CombatEnded,
     EventBus,
+    SceneEnded,
     ScenePlaybackStarted,
     ScenePlaybackStopped,
     TransitionStarted,
@@ -117,13 +117,13 @@ class SceneService:
         await self.player.stop()
         self.bus.publish(ScenePlaybackStopped(scene_id=current_id))
 
-    async def end_combat(self) -> None:
+    async def end_scene(self) -> None:
         current = self.player.current_scene
         if current is None:
             return
         current_id = UUID(current.id)
-        self.bus.publish(CombatEnded(scene_id=current_id))
-        await self.player.end_combat(self._resolve_by_str_id)
+        self.bus.publish(SceneEnded(scene_id=current_id))
+        await self.player.end_scene(self._resolve_by_str_id)
 
     def set_master_volume(self, volume: float) -> None:
         self.engine.set_master_volume(volume)

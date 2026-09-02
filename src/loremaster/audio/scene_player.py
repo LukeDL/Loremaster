@@ -5,13 +5,16 @@
 - goto:<scene_id>: crossfade to a specific scene (resolved via injected resolver)
 - stop: fade everything out
 
-End-of-combat with loop region
-------------------------------
-When a scene has layers with loop_start_ms/loop_end_ms set, `end_combat()`
-first tells each such layer to exit its loop (playing the tail after
-loop_end), then waits for those tails to finish naturally, then applies the
-on_end policy. This is the Skyrim/Wwise "post-exit playback" pattern: you
-hear the musical closure before ambient returns.
+FIM DA CENA with loop region (M14)
+----------------------------------
+When a scene has layers with `loop_start_ms`/`loop_end_ms` set, `end_scene()`
+tells the engine to *jump* each of those layers directly to their tail
+(`loop_end` -> EOF) via a short crossfade — no matter where the loop cursor
+currently is. Immediately after, it applies the `on_end` policy, so the tail
+and the next scene's fade-in play concurrently.
+
+This replaces the pre-M14 behavior that waited (with the player lock held)
+for tails to reach EOF — see issue #4.
 """
 
 from __future__ import annotations
@@ -30,8 +33,9 @@ log = logging.getLogger(__name__)
 
 OnEndType = Literal["return_previous", "goto", "stop"]
 
-# Safety cap: no tail should keep the transition waiting forever.
-_TAIL_TIMEOUT_S = 60.0
+# Duration of the loop -> tail crossfade. Short and predictable, per the
+# design conversation for M14. Not user-configurable (yet).
+_TAIL_CROSSFADE_MS = 300
 
 
 @dataclass
@@ -56,9 +60,6 @@ class ScenePlayer:
         self._current: SceneSpec | None = None
         self._previous: SceneSpec | None = None
         self._lock = asyncio.Lock()
-        # Layer id -> asyncio.Event that fires when the layer ends naturally.
-        # Populated on play(), consumed by end_combat() to wait for the tail.
-        self._ended_events: dict[str, asyncio.Event] = {}
 
     @property
     def current_scene(self) -> SceneSpec | None:
@@ -71,91 +72,84 @@ class ScenePlayer:
     async def play(self, scene: SceneSpec) -> None:
         """Start a scene. If another scene is playing, crossfade into this one."""
         async with self._lock:
-            log.info("scene play: %s (was %s)", scene.id, self._current.id if self._current else None)
-            await self._fade_out_and_forget_current()
-            loop = asyncio.get_running_loop()
-            for layer_spec in scene.layers:
-                scoped_id = _scoped(scene.id, layer_spec.id)
-                event = asyncio.Event()
-                self._ended_events[scoped_id] = event
-                self.engine.play_layer(
-                    scoped_id,
-                    layer_spec,
-                    on_ended=self._make_on_ended(loop, event),
-                )
-            if self._current is not None and self._current.id != scene.id:
-                self._previous = self._current
-            self._current = scene
+            await self._play_locked(scene)
 
     async def stop(self) -> None:
         async with self._lock:
-            log.info("scene stop")
-            await self._fade_out_and_forget_current()
-            self._current = None
+            await self._stop_locked()
 
-    async def end_combat(
+    async def end_scene(
         self,
         scene_resolver: Callable[[str], Awaitable["SceneSpec | None"]],
     ) -> None:
         """Apply the current scene's on_end policy.
 
-        If the current scene has any layers with a loop region, first ask
-        those layers to exit their loop and wait for the tail to finish
-        before transitioning.
-        """
+        For layers with a loop region: enqueue a jump-to-tail (short crossfade
+        from the current loop position to a fresh Layer starting at loop_end).
+        For layers without: they'll be crossfaded out by the transition below.
+
+        The tail plays concurrently with the next scene's fade-in — we don't
+        wait for it. The whole method holds the lock for a short, bounded
+        window (just command enqueue + resolver hydration + play/stop), which
+        is the fix for issue #4."""
         if self._current is None:
             return
         async with self._lock:
-            await self._await_tails()
-        policy = self._current.on_end
-        if policy.type == "return_previous":
-            target = self._previous
-            if target is None:
-                log.info("end_combat: return_previous but no previous scene, stopping")
-                await self.stop()
+            for spec in self._current.layers:
+                if spec.loop_start_ms is None or spec.loop_end_ms is None:
+                    continue
+                scoped_id = _scoped(self._current.id, spec.id)
+                tail_id = _tail_id(self._current.id, spec.id)
+                self.engine.jump_to_tail(
+                    scoped_id, tail_id, tail_fade_ms=_TAIL_CROSSFADE_MS,
+                )
+            policy = self._current.on_end
+            current_id = self._current.id
+            previous = self._previous
+            # Apply the policy inline while still holding the lock. Any
+            # subsequent play/stop from the user queues up behind us and runs
+            # after — the intended sequential behavior.
+            if policy.type == "stop":
+                log.info("end_scene: stop")
+                await self._stop_locked()
                 return
-            await self.play(target)
-        elif policy.type == "goto":
-            if policy.goto_scene_id is None:
-                log.warning("end_combat: goto policy without scene_id, stopping")
-                await self.stop()
-                return
-            target = await scene_resolver(policy.goto_scene_id)
-            if target is None:
-                log.warning("end_combat: goto target %s not found, stopping", policy.goto_scene_id)
-                await self.stop()
-                return
-            await self.play(target)
-        else:  # stop
-            await self.stop()
+            if policy.type == "return_previous":
+                target = previous
+                if target is None or target.id == current_id:
+                    log.info("end_scene: return_previous with no valid previous, stopping")
+                    await self._stop_locked()
+                    return
+            else:  # goto
+                if policy.goto_scene_id is None:
+                    log.warning("end_scene: goto policy without scene_id, stopping")
+                    await self._stop_locked()
+                    return
+                target = await scene_resolver(policy.goto_scene_id)
+                if target is None:
+                    log.warning("end_scene: goto target %s not found, stopping", policy.goto_scene_id)
+                    await self._stop_locked()
+                    return
+            await self._play_locked(target)
 
     # ---- internals ----------------------------------------------------------
 
-    async def _await_tails(self) -> None:
-        """Trigger exit-loop on layers that have a loop region and wait for
-        their tails to reach EOF. Layers without a loop region are ignored
-        here (they'll be crossfaded out normally when the next scene plays)."""
-        if self._current is None:
-            return
-        tail_events: list[asyncio.Event] = []
-        for spec in self._current.layers:
-            if spec.loop_start_ms is None or spec.loop_end_ms is None:
-                continue
-            scoped_id = _scoped(self._current.id, spec.id)
-            self.engine.exit_layer_loop(scoped_id)
-            event = self._ended_events.get(scoped_id)
-            if event is not None:
-                tail_events.append(event)
-        if not tail_events:
-            return
-        log.info("end_combat: waiting for %d tail(s) to finish", len(tail_events))
-        try:
-            await asyncio.wait_for(
-                asyncio.gather(*(e.wait() for e in tail_events)),
-                timeout=_TAIL_TIMEOUT_S,
-            )
-        except TimeoutError:
-            log.warning("end_combat: tail timeout after %.1fs, transitioning anyway", _TAIL_TIMEOUT_S)
+    async def _play_locked(self, scene: SceneSpec) -> None:
+        """Play under the assumption that the caller holds ``self._lock``."""
+        log.info("scene play: %s (was %s)", scene.id, self._current.id if self._current else None)
+        await self._fade_out_and_forget_current()
+        for layer_spec in scene.layers:
+            scoped_id = _scoped(scene.id, layer_spec.id)
+            self.engine.play_layer(scoped_id, layer_spec)
+        if self._current is not None and self._current.id != scene.id:
+            self._previous = self._current
+        self._current = scene
+
+    async def _stop_locked(self) -> None:
+        log.info("scene stop")
+        # Fade EVERY active layer, including tail sublayers spawned by an
+        # earlier end_scene. When the user hits ■ they want silence.
+        self.engine.stop_all()
+        self._current = None
 
     async def _fade_out_and_forget_current(self) -> None:
         if self._current is None:
@@ -163,19 +157,15 @@ class ScenePlayer:
         for layer_spec in self._current.layers:
             scoped_id = _scoped(self._current.id, layer_spec.id)
             self.engine.fade_out_layer(scoped_id)
-            # Drop the ended-event for the old layer — a fade_out doesn't fire
-            # our on_ended callback in a semantically useful way, and if the
-            # layer ended earlier (e.g. tail already played) we don't need it.
-            self._ended_events.pop(scoped_id, None)
-
-    @staticmethod
-    def _make_on_ended(loop: asyncio.AbstractEventLoop, event: asyncio.Event) -> Callable[[str], None]:
-        """Wrap an asyncio.Event.set() so it can be called from the audio
-        callback thread. asyncio primitives aren't thread-safe by themselves."""
-        def _notify(_layer_id: str) -> None:
-            loop.call_soon_threadsafe(event.set)
-        return _notify
+        # Tail sublayers (spawned by jump_to_tail) are intentionally left
+        # alone here — they play to EOF and get removed by the engine.
 
 
 def _scoped(scene_id: str, layer_id: str) -> str:
     return f"{scene_id}::{layer_id}"
+
+
+def _tail_id(scene_id: str, layer_id: str) -> str:
+    # Distinct id so the engine treats the tail as a new independent layer
+    # instead of crossfading it against the original.
+    return f"{scene_id}::{layer_id}::__tail"
