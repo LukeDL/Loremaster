@@ -5,15 +5,24 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import datetime
+import logging
+from pathlib import Path
+import sqlite3
 from uuid import UUID
 
-from sqlalchemy import ForeignKey, String, Text, text
+from sqlalchemy import ForeignKey, String, Text, event, text
+from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
     async_sessionmaker,
     create_async_engine,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+
+from loremaster.models.migrations import MIGRATION_VERSIONS, apply_migrations
+
+
+log = logging.getLogger(__name__)
 
 
 class Base(DeclarativeBase):
@@ -83,27 +92,39 @@ class Database:
     """Async SQLite session factory. One instance per app."""
 
     def __init__(self, url: str) -> None:
+        self._sqlite_path = _sqlite_file_path(url)
         self.engine = create_async_engine(url, echo=False, future=True)
+        event.listen(self.engine.sync_engine, "connect", _enable_sqlite_foreign_keys)
         self.session_factory = async_sessionmaker(self.engine, expire_on_commit=False)
 
     async def create_all(self) -> None:
+        backup = self._backup_before_pending_migrations()
+        if backup is not None:
+            log.info("created pre-migration database backup at %s", backup)
         async with self.engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
-            await self._ensure_columns(conn)
+            await apply_migrations(conn)
+            violations = (await conn.execute(text("PRAGMA foreign_key_check"))).fetchall()
+            if violations:
+                details = ", ".join(
+                    f"{table}[rowid={rowid}] -> {parent}" for table, rowid, parent, _ in violations
+                )
+                raise RuntimeError(f"database contains invalid foreign-key references: {details}")
 
-    async def _ensure_columns(self, conn) -> None:
-        """Idempotent ALTER TABLE ADD COLUMN for columns added after initial
-        release. Base.metadata.create_all only creates missing tables — it
-        never adds columns to existing ones (see ISSUES.md #2)."""
-        additions = [
-            ("scenes", "is_entry", "BOOLEAN NOT NULL DEFAULT 0"),
-            ("layers", "pan_lr", "REAL NOT NULL DEFAULT 0.0"),
-        ]
-        for table, column, decl in additions:
-            result = await conn.execute(text(f"PRAGMA table_info({table})"))
-            existing = {row[1] for row in result}
-            if column not in existing:
-                await conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {decl}"))
+    def _backup_before_pending_migrations(self) -> Path | None:
+        path = self._sqlite_path
+        if path is None or not path.is_file() or not _has_pending_migrations(path):
+            return None
+        backup_dir = path.parent / "backups"
+        backup_dir.mkdir(parents=True, exist_ok=True)
+        applied = _applied_migration_versions(path)
+        next_version = len(applied) + 1
+        backup = backup_dir / f"{path.stem}-pre-migration-{next_version:03d}{path.suffix}"
+        if backup.exists():
+            return backup
+        with sqlite3.connect(path) as source, sqlite3.connect(backup) as destination:
+            source.backup(destination)
+        return backup
 
     @asynccontextmanager
     async def session(self) -> AsyncIterator[AsyncSession]:
@@ -116,3 +137,32 @@ class Database:
 
 def uuid_str(u: UUID | str) -> str:
     return str(u)
+
+
+def _enable_sqlite_foreign_keys(dbapi_connection, _connection_record) -> None:
+    cursor = dbapi_connection.cursor()
+    try:
+        cursor.execute("PRAGMA foreign_keys=ON")
+    finally:
+        cursor.close()
+
+
+def _sqlite_file_path(url: str) -> Path | None:
+    parsed = make_url(url)
+    if not parsed.drivername.startswith("sqlite") or parsed.database in (None, ":memory:"):
+        return None
+    return Path(parsed.database).resolve()
+
+
+def _applied_migration_versions(path: Path) -> set[str]:
+    with sqlite3.connect(path) as connection:
+        table = connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='schema_migrations'"
+        ).fetchone()
+        if table is None:
+            return set()
+        return {row[0] for row in connection.execute("SELECT version FROM schema_migrations")}
+
+
+def _has_pending_migrations(path: Path) -> bool:
+    return not MIGRATION_VERSIONS.issubset(_applied_migration_versions(path))

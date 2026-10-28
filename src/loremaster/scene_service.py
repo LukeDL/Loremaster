@@ -24,7 +24,7 @@ from loremaster.events import (
     VolumeChanged,
 )
 from loremaster.models.db import Database
-from loremaster.models.repository import get_audio_file, get_scene
+from loremaster.models.repository import get_audio_file, get_scene, list_scenes
 from loremaster.models.scene import OnEndGoto, Scene
 
 log = logging.getLogger(__name__)
@@ -47,6 +47,30 @@ class SceneService:
         self.bus = bus
         self.audio_dir = audio_dir
 
+    async def validate_references(self) -> None:
+        """Reject legacy scene graphs that point to missing scenes or files."""
+        errors: list[str] = []
+        async with self.db.session() as sess:
+            scenes = await list_scenes(sess)
+            scene_ids = {scene.id for scene in scenes}
+            for scene in scenes:
+                if isinstance(scene.on_end, OnEndGoto) and scene.on_end.scene_id not in scene_ids:
+                    errors.append(
+                        f"scene {scene.id} points to missing scene {scene.on_end.scene_id}"
+                    )
+                for layer in scene.layers:
+                    audio = await get_audio_file(sess, layer.audio_file_id)
+                    if audio is None:
+                        errors.append(
+                            f"scene {scene.id} points to missing audio row {layer.audio_file_id}"
+                        )
+                    elif not (self.audio_dir / audio.path).is_file():
+                        errors.append(
+                            f"scene {scene.id} points to missing audio file {audio.path}"
+                        )
+        if errors:
+            raise RuntimeError("invalid scene references: " + "; ".join(errors))
+
     async def _hydrate(self, scene: Scene) -> SceneSpec:
         """Load audio files referenced by a Scene into an engine-ready SceneSpec."""
         layer_specs: list[LayerSpec] = []
@@ -54,8 +78,9 @@ class SceneService:
             for layer in scene.layers:
                 audio = await get_audio_file(sess, layer.audio_file_id)
                 if audio is None:
-                    log.warning("scene %s references missing audio %s", scene.id, layer.audio_file_id)
-                    continue
+                    raise RuntimeError(
+                        f"scene {scene.id} references missing audio {layer.audio_file_id}"
+                    )
                 loaded = self.loader.load(self.audio_dir / audio.path)
                 layer_specs.append(
                     LayerSpec(

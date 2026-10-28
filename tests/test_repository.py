@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from uuid import uuid4
+
 
 import pytest
 import pytest_asyncio
@@ -93,12 +93,13 @@ async def test_scene_create_and_retrieve(db, audio_file):
 
 @pytest.mark.asyncio
 async def test_on_end_policies_roundtrip(db, audio_file):
-    target_id = uuid4()
-
     async with db.session() as sess:
+        target = await create_scene(sess, SceneCreate(name="target", on_end=OnEndStop()))
         s1 = await create_scene(sess, SceneCreate(name="a", on_end=OnEndReturnPrevious()))
         s2 = await create_scene(sess, SceneCreate(name="b", on_end=OnEndStop()))
-        s3 = await create_scene(sess, SceneCreate(name="c", on_end=OnEndGoto(scene_id=target_id)))
+        s3 = await create_scene(
+            sess, SceneCreate(name="c", on_end=OnEndGoto(scene_id=target.id))
+        )
 
         r1 = await get_scene(sess, s1.id)
         r2 = await get_scene(sess, s2.id)
@@ -107,7 +108,7 @@ async def test_on_end_policies_roundtrip(db, audio_file):
         assert r1.on_end.type == "return_previous"
         assert r2.on_end.type == "stop"
         assert r3.on_end.type == "goto"
-        assert r3.on_end.scene_id == target_id
+        assert r3.on_end.scene_id == target.id
 
 
 @pytest.mark.asyncio

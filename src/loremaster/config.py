@@ -2,21 +2,51 @@
 
 from __future__ import annotations
 
+import os
+from collections.abc import Mapping
 from pathlib import Path
+import sys
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# Anchor the default data dir to the project root (three parents up from this
-# file: src/loremaster/config.py -> project root), NOT the current working
-# directory. Running uvicorn from any subfolder used to silently create a
-# stray data/ next to the cwd; this keeps everyone pointed at the same place.
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+_LEGACY_DATA_DIR = _PROJECT_ROOT / "data"
+
+
+def default_data_dir(
+    *,
+    platform: str | None = None,
+    environ: Mapping[str, str] | None = None,
+    home: Path | None = None,
+) -> Path:
+    """Return a user-writable, platform-appropriate application data folder."""
+    platform = platform or sys.platform
+    environment = os.environ if environ is None else environ
+    home = home or Path.home()
+    if platform == "win32":
+        root = Path(
+            environment.get("LOCALAPPDATA")
+            or environment.get("APPDATA")
+            or home / "AppData/Local"
+        )
+        return root / "Loremaster"
+    if platform == "darwin":
+        return home / "Library/Application Support/Loremaster"
+    root = Path(environment.get("XDG_DATA_HOME", home / ".local/share"))
+    return root / "loremaster"
+
+
+def _initial_data_dir() -> Path:
+    """Keep an existing source-checkout database visible during the transition."""
+    if (_LEGACY_DATA_DIR / "loremaster.db").is_file():
+        return _LEGACY_DATA_DIR
+    return default_data_dir()
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="LOREMASTER_", env_file=".env")
 
-    data_dir: Path = _PROJECT_ROOT / "data"
+    data_dir: Path = _initial_data_dir()
     host: str = "0.0.0.0"
     port: int = 8765
     sample_rate: int = 48_000

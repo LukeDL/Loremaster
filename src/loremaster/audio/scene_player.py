@@ -111,23 +111,23 @@ class ScenePlayer:
             # after — the intended sequential behavior.
             if policy.type == "stop":
                 log.info("end_scene: stop")
-                await self._stop_locked()
+                self._finish_current_locked()
                 return
             if policy.type == "return_previous":
                 target = previous
                 if target is None or target.id == current_id:
                     log.info("end_scene: return_previous with no valid previous, stopping")
-                    await self._stop_locked()
+                    self._finish_current_locked()
                     return
             else:  # goto
                 if policy.goto_scene_id is None:
                     log.warning("end_scene: goto policy without scene_id, stopping")
-                    await self._stop_locked()
+                    self._finish_current_locked()
                     return
                 target = await scene_resolver(policy.goto_scene_id)
                 if target is None:
                     log.warning("end_scene: goto target %s not found, stopping", policy.goto_scene_id)
-                    await self._stop_locked()
+                    self._finish_current_locked()
                     return
             await self._play_locked(target)
 
@@ -149,6 +149,15 @@ class ScenePlayer:
         # Fade EVERY active layer, including tail sublayers spawned by an
         # earlier end_scene. When the user hits ■ they want silence.
         self.engine.stop_all()
+        self._current = None
+
+    def _finish_current_locked(self) -> None:
+        """End by policy while preserving tail sublayers spawned above."""
+        if self._current is None:
+            return
+        for layer_spec in self._current.layers:
+            if layer_spec.loop_start_ms is None or layer_spec.loop_end_ms is None:
+                self.engine.fade_out_layer(_scoped(self._current.id, layer_spec.id))
         self._current = None
 
     async def _fade_out_and_forget_current(self) -> None:

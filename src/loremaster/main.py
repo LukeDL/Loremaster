@@ -52,6 +52,7 @@ async def lifespan(app: FastAPI):
         bus=bus,
         audio_dir=settings.audio_dir,
     )
+    await service.validate_references()
     broadcaster = WsBroadcaster(bus, service)
 
     engine.start()
@@ -80,8 +81,9 @@ async def lifespan(app: FastAPI):
         await db.close()
 
 
-def create_app() -> FastAPI:
-    app = FastAPI(title="Loremaster", version="0.1.0", lifespan=lifespan)
+def create_app(lifespan_context=lifespan) -> FastAPI:
+    """Build the app with an explicit seam for hardware-free tests."""
+    app = FastAPI(title="Loremaster", version="0.1.0", lifespan=lifespan_context)
 
     app.include_router(uploads.router)
     app.include_router(scenes.router)

@@ -10,6 +10,7 @@ from loremaster.audio.layer import Layer, LayerSpec, LayerState
 
 
 SR = 48_000
+CENTER_PAN_GAIN = np.sqrt(0.5).astype(np.float32)
 
 
 def _stereo_ramp(n: int) -> np.ndarray:
@@ -32,7 +33,7 @@ def test_loop_wrap_is_gapless():
     assert alive
 
     expected = np.concatenate([data, data, data[:50]], axis=0)
-    np.testing.assert_allclose(out, expected, atol=1e-6)
+    np.testing.assert_allclose(out, expected * CENTER_PAN_GAIN, atol=1e-6)
 
 
 def test_non_loop_ends_after_buffer():
@@ -44,7 +45,7 @@ def test_non_loop_ends_after_buffer():
     # same call (no zombie "one more read returning False" state).
     out1 = np.zeros((64, 2), dtype=np.float32)
     assert layer.read(out1, 64) is False
-    np.testing.assert_allclose(out1, data, atol=1e-6)
+    np.testing.assert_allclose(out1, data * CENTER_PAN_GAIN, atol=1e-6)
 
 
 def test_equal_power_envelope_sums_to_unity():
@@ -68,9 +69,9 @@ def test_fade_in_reaches_full_volume():
 
     # First sample should be near 0 (sin(0) = 0), last of fade near 1 (sin(pi/2))
     assert out[0, 0] < 0.05
-    assert out[n_frames - 1, 0] == pytest.approx(1.0, abs=1e-3)
+    assert out[n_frames - 1, 0] == pytest.approx(CENTER_PAN_GAIN, abs=1e-3)
     # After the fade the layer is at full base volume
-    assert out[n_frames + 50, 0] == pytest.approx(1.0, abs=1e-6)
+    assert out[n_frames + 50, 0] == pytest.approx(CENTER_PAN_GAIN, abs=1e-6)
     assert layer.state == LayerState.PLAYING
 
 
@@ -90,7 +91,7 @@ def test_fade_out_ends_layer():
     assert alive is False
     assert layer.state == LayerState.ENDED
     # Fade started at full, ends near zero
-    assert out[0, 0] == pytest.approx(1.0, abs=1e-3)
+    assert out[0, 0] == pytest.approx(CENTER_PAN_GAIN, abs=1e-3)
     assert out[n_frames - 1, 0] < 0.05
     # After fade completes, nothing further is written
     np.testing.assert_allclose(out[n_frames:], np.zeros_like(out[n_frames:]), atol=1e-6)
@@ -116,8 +117,8 @@ def test_loop_region_wraps_at_loop_end_not_file_end():
     # intro (200) + full loop (400) + 250 of second loop = 850 frames
     out = np.zeros((850, 2), dtype=np.float32)
     assert layer.read(out, 850) is True
-    np.testing.assert_allclose(out[:600], data[:600], atol=1e-6)
-    np.testing.assert_allclose(out[600:850], data[200:450], atol=1e-6)
+    np.testing.assert_allclose(out[:600], data[:600] * CENTER_PAN_GAIN, atol=1e-6)
+    np.testing.assert_allclose(out[600:850], data[200:450] * CENTER_PAN_GAIN, atol=1e-6)
 
 
 def test_exit_loop_lets_tail_play_to_eof():
@@ -146,7 +147,7 @@ def test_exit_loop_lets_tail_play_to_eof():
     alive = layer.read(out2, 300)
     assert alive is False
     assert layer.state == LayerState.ENDED
-    np.testing.assert_allclose(out2[:250], data[250:500], atol=1e-6)
+    np.testing.assert_allclose(out2[:250], data[250:500] * CENTER_PAN_GAIN, atol=1e-6)
     np.testing.assert_allclose(out2[250:], np.zeros_like(out2[250:]), atol=1e-6)
 
 
@@ -173,4 +174,4 @@ def test_volume_scales_output():
     layer = Layer.start(spec, SR)
     out = np.zeros((50, 2), dtype=np.float32)
     layer.read(out, 50)
-    np.testing.assert_allclose(out, 0.3 * np.ones_like(out), atol=1e-6)
+    np.testing.assert_allclose(out, 0.3 * CENTER_PAN_GAIN * np.ones_like(out), atol=1e-6)

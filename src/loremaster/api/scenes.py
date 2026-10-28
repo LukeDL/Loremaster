@@ -11,6 +11,7 @@ from pydantic import BaseModel
 
 from loremaster.api.deps import db_session
 from loremaster.models.repository import (
+    InvalidReferenceError,
     create_scene,
     delete_scene,
     get_scene,
@@ -50,7 +51,10 @@ async def list_all(sess: AsyncSession = Depends(db_session)) -> list[Scene]:
 
 @router.post("", response_model=Scene, status_code=status.HTTP_201_CREATED)
 async def create(payload: SceneCreate, sess: AsyncSession = Depends(db_session)) -> Scene:
-    return await create_scene(sess, payload)
+    try:
+        return await create_scene(sess, payload)
+    except InvalidReferenceError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
 
 
 @router.get("/{scene_id}", response_model=Scene)
@@ -67,7 +71,10 @@ async def update(
     payload: SceneUpdate,
     sess: AsyncSession = Depends(db_session),
 ) -> Scene:
-    scene = await update_scene(sess, scene_id, payload)
+    try:
+        scene = await update_scene(sess, scene_id, payload)
+    except InvalidReferenceError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
     if scene is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "scene not found")
     return scene
@@ -75,7 +82,10 @@ async def update(
 
 @router.delete("/{scene_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def destroy(scene_id: UUID, sess: AsyncSession = Depends(db_session)) -> None:
-    deleted = await delete_scene(sess, scene_id)
+    try:
+        deleted = await delete_scene(sess, scene_id)
+    except InvalidReferenceError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
     if not deleted:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "scene not found")
 
@@ -115,7 +125,10 @@ async def set_on_end(
 ) -> Scene:
     """Change only the on_end policy — used when the user draws/removes an
     edge on the campaign graph."""
-    scene = await update_scene(sess, scene_id, SceneUpdate(on_end=payload.on_end))
+    try:
+        scene = await update_scene(sess, scene_id, SceneUpdate(on_end=payload.on_end))
+    except InvalidReferenceError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
     if scene is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "scene not found")
     return scene

@@ -1,7 +1,4 @@
-"""End-to-end API tests: upload -> create scene -> play -> end_scene -> stop.
-
-We swap the real AudioEngine for a fake one to avoid opening PortAudio.
-"""
+"""End-to-end API tests: upload -> create scene -> play -> end_scene -> stop."""
 
 from __future__ import annotations
 
@@ -9,119 +6,7 @@ import io
 
 import numpy as np
 import pytest
-import pytest_asyncio
 import soundfile as sf
-from fastapi.testclient import TestClient
-
-from loremaster.audio.scene_player import ScenePlayer
-from loremaster.config import settings
-from loremaster.events import EventBus
-from loremaster.main import create_app
-from loremaster.models.db import Database
-from loremaster.scene_service import SceneService
-
-
-# ---- Fake engine -------------------------------------------------------------
-
-
-class FakeEngine:
-    """Replaces AudioEngine — records commands, exposes a snapshot the API can read."""
-
-    def __init__(self, sample_rate: int = 48_000) -> None:
-        self.sample_rate = sample_rate
-        self.block_size = 1024
-        self.played: list[str] = []
-        self.faded_out: list[str] = []
-        self._master_volume = 1.0
-
-    def start(self) -> None: ...
-    def stop(self) -> None: ...
-
-    def play_layer(self, layer_id, spec, on_ended=None) -> None:
-        self.played.append(layer_id)
-
-    def fade_out_layer(self, layer_id) -> None:
-        self.faded_out.append(layer_id)
-
-    def exit_layer_loop(self, layer_id) -> None: ...
-
-    def set_layer_volume(self, layer_id, volume) -> None: ...
-
-    def set_master_volume(self, volume) -> None:
-        self._master_volume = volume
-
-    def stop_all(self) -> None: ...
-
-    def snapshot(self):
-        return {"layers": {}, "master_volume": self._master_volume, "xrun_count": 0}
-
-
-class FakeLoader:
-    def __init__(self, sample_rate: int = 48_000) -> None:
-        self.target_sample_rate = sample_rate
-
-    def load(self, path):
-        # 1 second of silence, stereo. Whatever the file is on disk.
-        from loremaster.audio.loader import LoadedAudio
-        return LoadedAudio(
-            data=np.zeros((self.target_sample_rate, 2), dtype=np.float32),
-            sample_rate=self.target_sample_rate,
-            source_path=path,
-        )
-
-
-# ---- Fixtures ----------------------------------------------------------------
-
-
-@pytest_asyncio.fixture
-async def app(tmp_path, monkeypatch):
-    # Redirect data to tmp_path so we don't touch the real filesystem
-    monkeypatch.setattr(settings, "data_dir", tmp_path)
-    (tmp_path / "audio").mkdir()
-
-    app = create_app()
-
-    # Swap lifespan-created objects with fakes on our terms
-    from contextlib import asynccontextmanager
-
-    @asynccontextmanager
-    async def fake_lifespan(app):
-        db = Database(f"sqlite+aiosqlite:///{tmp_path / 'test.db'}")
-        await db.create_all()
-
-        bus = EventBus()
-        engine = FakeEngine()
-        loader = FakeLoader()
-        player = ScenePlayer(engine)  # type: ignore[arg-type]
-        service = SceneService(
-            engine=engine,  # type: ignore[arg-type]
-            loader=loader,  # type: ignore[arg-type]
-            player=player,
-            db=db,
-            bus=bus,
-            audio_dir=tmp_path / "audio",
-        )
-        app.state.db = db
-        app.state.bus = bus
-        app.state.engine = engine
-        app.state.scene_service = service
-        # ws_broadcaster not started — WS test uses TestClient which handles it
-        from loremaster.api.ws import WsBroadcaster
-        broadcaster = WsBroadcaster(bus, service)
-        app.state.ws_broadcaster = broadcaster
-        try:
-            yield
-        finally:
-            await db.close()
-
-    app.router.lifespan_context = fake_lifespan
-    yield app
-
-
-@pytest.fixture
-def client(app):
-    with TestClient(app) as c:
-        yield c
 
 
 def _wav_bytes(seconds: float = 0.5, sample_rate: int = 48_000) -> bytes:
@@ -168,6 +53,40 @@ def test_create_scene_and_retrieve(client):
 
     fetched = client.get(f"/api/scenes/{scene['id']}").json()
     assert fetched["id"] == scene["id"]
+
+
+def test_create_scene_rejects_missing_audio_reference(client):
+    from uuid import uuid4
+
+    response = client.post(
+        "/api/scenes",
+        json={"name": "broken", "layers": [{"audio_file_id": str(uuid4())}]},
+    )
+    assert response.status_code == 422
+    assert "audio files not found" in response.json()["detail"]
+
+
+def test_transition_rejects_missing_target_and_blocks_target_deletion(client):
+    from uuid import uuid4
+
+    source = client.post("/api/scenes", json={"name": "source"}).json()
+    target = client.post("/api/scenes", json={"name": "target"}).json()
+
+    missing = client.patch(
+        f"/api/scenes/{source['id']}/on_end",
+        json={"on_end": {"type": "goto", "scene_id": str(uuid4())}},
+    )
+    assert missing.status_code == 422
+    assert "transition target scene not found" in missing.json()["detail"]
+
+    linked = client.patch(
+        f"/api/scenes/{source['id']}/on_end",
+        json={"on_end": {"type": "goto", "scene_id": target["id"]}},
+    )
+    assert linked.status_code == 200
+    blocked = client.delete(f"/api/scenes/{target['id']}")
+    assert blocked.status_code == 409
+    assert "referenced by transition" in blocked.json()["detail"]
 
 
 def test_play_stop_end_scene_flow(client):

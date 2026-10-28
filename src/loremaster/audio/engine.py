@@ -19,6 +19,7 @@ Rules for the callback:
 from __future__ import annotations
 
 import logging
+from importlib import import_module
 import queue
 import threading
 from collections.abc import Callable
@@ -26,7 +27,6 @@ from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
-import sounddevice as sd
 
 from loremaster.audio.layer import Layer, LayerSpec, LayerState
 
@@ -110,7 +110,7 @@ class AudioEngine:
         self._layers: dict[str, Layer] = {}
         self._master_volume: float = 1.0
         self._command_queue: queue.Queue[_Cmd] = queue.Queue()
-        self._stream: sd.OutputStream | None = None
+        self._stream: Any | None = None
         self._xrun_count: int = 0
         # snapshot lock — public state readers acquire this briefly.
         # Callback publishes a snapshot after each block; readers copy it.
@@ -122,6 +122,13 @@ class AudioEngine:
     def start(self) -> None:
         if self._stream is not None:
             return
+        try:
+            sd = import_module("sounddevice")
+        except (ImportError, OSError) as exc:
+            raise RuntimeError(
+                "PortAudio is required to start AudioEngine; install the system "
+                "PortAudio library or inject a fake engine for headless tests."
+            ) from exc
         self._stream = sd.OutputStream(
             samplerate=self.sample_rate,
             blocksize=self.block_size,
@@ -211,7 +218,7 @@ class AudioEngine:
         outdata: np.ndarray,
         frames: int,
         _time: Any,
-        status: sd.CallbackFlags,
+        status: Any,
     ) -> None:
         if status:
             # underrun/overrun is the only failure mode we care about here

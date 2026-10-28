@@ -1,5 +1,14 @@
-"""Loremaster — audio companion for D&D sessions."""
+"""Loremaster — audio companion for D&D sessions.
 
-from loremaster.main import main
+Keep package import side-effect free so data, event, and mixer modules remain
+usable on machines where PortAudio is not installed.
+"""
+
+
+def main() -> None:
+    """Console-script shim that imports the app only when executed."""
+    from loremaster.main import main as run_main
+
+    run_main()
 
 __all__ = ["main"]

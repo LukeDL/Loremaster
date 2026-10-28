@@ -1,128 +1,141 @@
-# Loremaster — Roadmap
+# Loremaster — Roadmap 2
 
-## Atualizando dependências frontend vendorizadas
+O Loremaster é uma ferramenta local-first para áudio, luz e ambientação em
+sessões de RPG. A aplicação deve continuar utilizável sem internet, com o
+notebook como servidor e o tablet como controle.
 
-O app não usa CDN — todas as libs JS/CSS estão em `src/loremaster/web/vendor/`
-pra funcionar em mesas sem internet. Pra atualizar uma versão, baixe
-manualmente da fonte oficial e substitua:
+## Forma de trabalho
 
-```bash
-cd src/loremaster/web/vendor
-# Vue (bundle IIFE pra /, e ESM pra /map)
-curl -sfLo vue.global.prod.js       'https://cdn.jsdelivr.net/npm/vue@<VER>/dist/vue.global.prod.js'
-curl -sfLo vue.esm-browser.prod.js  'https://cdn.jsdelivr.net/npm/vue@<VER>/dist/vue.esm-browser.prod.js'
-# Vue Flow (core + plugins). Os .mjs oficiais só importam "vue" e
-# "@vue-flow/core" (resolvidos pelo import map em map.html).
-curl -sfLo vue-flow-core.js         'https://cdn.jsdelivr.net/npm/@vue-flow/core@<VER>/dist/vue-flow-core.mjs'
-curl -sfLo vue-flow-background.js   'https://cdn.jsdelivr.net/npm/@vue-flow/background@<VER>/dist/vue-flow-background.mjs'
-curl -sfLo vue-flow-controls.js     'https://cdn.jsdelivr.net/npm/@vue-flow/controls@<VER>/dist/vue-flow-controls.mjs'
-curl -sfLo vue-flow-minimap.js      'https://cdn.jsdelivr.net/npm/@vue-flow/minimap@<VER>/dist/vue-flow-minimap.mjs'
-# CSS
-curl -sfLo vue-flow-core.css         'https://cdn.jsdelivr.net/npm/@vue-flow/core@<VER>/dist/style.css'
-curl -sfLo vue-flow-theme-default.css 'https://cdn.jsdelivr.net/npm/@vue-flow/core@<VER>/dist/theme-default.css'
-curl -sfLo vue-flow-controls.css     'https://cdn.jsdelivr.net/npm/@vue-flow/controls@<VER>/dist/style.css'
-curl -sfLo vue-flow-minimap.css      'https://cdn.jsdelivr.net/npm/@vue-flow/minimap@<VER>/dist/style.css'
-# wavesurfer.js (usado pelo editor de loop region)
-curl -sfLo wavesurfer.esm.js         'https://cdn.jsdelivr.net/npm/wavesurfer.js@<VER>/dist/wavesurfer.esm.js'
-curl -sfLo wavesurfer-regions.esm.js 'https://cdn.jsdelivr.net/npm/wavesurfer.js@<VER>/dist/plugins/regions.esm.js'
-```
+- Uma entrega ativa por vez e uma única linha de integração.
+- Cada entrega termina em capacidade utilizável e verificada.
+- Testes automatizados não usam o banco nem os áudios reais.
+- Decisões duráveis ficam neste arquivo; problemas locais ficam em
+  `ISSUES.md`, que não é versionado.
+- Funcionalidades novas só avançam após a base anterior estar verde.
 
-Depois abrir `/` e `/map` no browser, verificar no DevTools > Network que
-nenhuma requisição sai pra domínio externo.
+## Roadmap 1 — estado consolidado
 
-## Fora do MVP, planejado
+Entregue até o M14:
 
-### Editor visual de cenas em node graph (state machine)
+- aplicação local com FastAPI, SQLite e engine de áudio em camadas;
+- upload, cenas, volume por camada e controle pelo tablet;
+- grafo visual de cenas em `/map`, com entrada, transições e posições;
+- operação offline, com dependências frontend vendorizadas;
+- regiões intro → loop → tail e editor visual dos marcadores;
+- painel de reprodução e waveforms;
+- pan estéreo equal-power na engine;
+- jump-to-tail com crossfade sem bloquear novos comandos.
 
-**Status**: concluído (M7). Disponível em `/map`.
+Pendências herdadas:
 
-Cada cena vira um nó no canvas; a política `on_end` de cada cena vira uma
-aresta que aponta pra outra cena (ou pra `stop`). O mestre "desenha" o fluxo
-da campanha e visualiza de bate-pronto o que vai acontecer quando apertar
-`FIM DE COMBATE` em qualquer cena. Roda no notebook (mouse-first) — não
-substitui a UI atual do tablet, que continua sendo a interface de execução
-durante a mesa.
+- mixer completo na interface, antigo M15;
+- integrações OBS, Home Assistant e MQTT;
+- buses, efeitos e sound design avançado;
+- validação em sessões reais e empacotamento operacional.
 
-Recursos:
+Multiusuário, iniciativa, dice roller e timer permanecem estacionados: não são
+parte do foco de áudio, luz e ambientação.
 
-- Cenas viram cards arrastáveis; posição persistida no banco.
-- Cenas com `on_end.goto` viram aresta card→card; `on_end.stop` vira aresta
-  pro node especial `⏹ fim`.
-- Node especial `▶ início` marca a cena de entrada da campanha via campo
-  `is_entry` (singleton, ao menos uma cena por vez).
-- Cada aresta tem chip flutuante com label + × pra remover; toolbar tem
-  botão redundante e Delete/Backspace também funcionam.
-- Viewport (pan/zoom) e posições dos nodes especiais persistem em
-  localStorage (mapa é single-user single-device).
+## R2.1 — Base confiável e redução do débito técnico
 
-### Módulos plugáveis via event bus
+**Status:** concluído localmente; aguardando validação no notebook real.
 
-O `EventBus` in-process do MVP já é a fundação. Módulos futuros são funções
-que fazem `bus.subscribe(EventType, handler)` no startup:
+Entregue:
 
-- **OBS**: subscriber em `ScenePlaybackStarted` troca a cena do OBS via
-  `obs-websocket`. Cria as cenas do OBS programaticamente na primeira
-  execução se ainda não existirem.
-- **Iluminação (Hue, Home Assistant)**: subscriber em `CombatEnded` /
-  `ScenePlaybackStarted` dispara comandos MQTT ou REST para dimmar/colorir
-  luzes conforme a cena.
-- **Ponte MQTT bidirecional**: `mqtt_bridge` republica todo evento do bus
-  em um tópico MQTT e consome tópicos externos para republicar como
-  eventos locais. Permite integração com qualquer coisa IoT.
+- imports lazy e lifespan injetável para testes sem PortAudio;
+- suíte headless alinhada ao pan equal-power do M13;
+- migrações SQLite ordenadas e registradas em `schema_migrations`;
+- backup automático antes de migrar bancos legados;
+- migração de `loop_start_ms`, `loop_end_ms`, `is_entry` e `pan_lr`;
+- `PRAGMA foreign_keys=ON` em todas as conexões e verificação de órfãos;
+- rejeição de cenas com áudios ou destinos `goto` inexistentes;
+- bloqueio da exclusão de uma cena ainda usada por uma transição;
+- validação, no startup, dos arquivos físicos usados pelas cenas;
+- diretório de dados apropriado à plataforma, com override por
+  `LOREMASTER_DATA_DIR` e compatibilidade com checkout legado;
+- regressões de hidratação, pan e jump-to-tail;
+- correção para que `on_end.stop` preserve a tail; o botão Stop continua
+  interrompendo todas as camadas imediatamente;
+- smoke tests de `/`, `/map` e todos os assets locais.
 
-Cada módulo é ativado por config (`config.py`). O core não precisa mudar.
+Aceite automatizado:
 
-## Ideias sob avaliação (backlog)
+- suíte completa passa sem dispositivo de áudio;
+- uma cópia de banco legado é migrada sem perda e com backup verificável;
+- build de sdist/wheel e `git diff --check` passam.
 
-### Editor de sound design com nós = camadas de uma cena (Skyrim/Wwise-like)
+Gate restante: executar a R2.2 no notebook com cópia dos dados reais antes de
+considerar a base operacionalmente validada.
 
-Uma segunda modalidade de edição, complementar ao grafo de cenas: dentro
-de UMA cena, cada camada vira um nó (fonte de áudio) e você monta uma
-rede de mixing conectando nós de camada → nós de efeito (ganho, filtro,
-delay, panner) → nó `output`. Modular synth estilo Wwise / FMOD Studio.
+## R2.2 — Retorno à mesa
 
-**Motivação**: transformar o Loremaster de "player de camadas simples"
-em ferramenta séria de sound design pra RPG. Permitiria efeitos como:
+**Status:** aguardando acesso ao notebook de desenvolvimento.
 
-- Ambiente adaptativo: layer de vento com filtro low-pass que abre
-  quando a cena "combate" começa (afeta trilha de exploração residual).
-- Sidechain: música baixa quando fala do NPC toca por cima.
-- Efeitos por camada: reverb só na trilha, delay só nos SFX, EQ na voz.
-- Buses: agrupar camadas em "música", "ambiente", "SFX" e controlar
-  volume do bus inteiro.
+Objetivo: executar a aplicação diretamente do checkout no notebook e validar
+o comportamento em hardware real, sem antecipar infraestrutura de release.
 
-**Custo estimado**: alto. Requer:
+1. preservar a R2.1 em commit local;
+2. atualizar ou copiar o checkout para o notebook;
+3. copiar `data/` para backup e testar somente sobre uma segunda cópia;
+4. executar `uv sync --dev` e `uv run loremaster`;
+5. validar banco migrado, arquivos de áudio e abertura das cenas;
+6. exercitar volume, pan, intro/loop/tail, `goto`, `return_previous`,
+   `on_end.stop` e o botão Stop no dispositivo de áudio real;
+7. controlar a execução pelo tablet e repetir o fluxo sem internet;
+8. registrar e corrigir somente os problemas observados nesse uso.
 
-- Novo modelo de dados: `Layer` vira um DAG (nós + conexões), não uma
-  lista plana.
-- Extensão do mixer NumPy: cadeia de efeitos em cada callback, mantendo
-  latência baixa. Efeitos comuns (biquad EQ, delay circular, reverb
-  simples) implementáveis em NumPy sem lib externa; reverb de qualidade
-  provavelmente precisa `pedalboard` ou `scipy.signal`.
-- UI: node editor bem mais denso que o grafo de cenas — muitos tipos de
-  nó, pinos tipados (áudio vs. controle), ordering topológico.
+Ficam fora desta entrega: instalador, launcher, `doctor`, PyInstaller, release
+candidate, rotação de logs e rollback automatizado.
 
-**Quando fazer**: depois do M7 (grafo de cenas) e depois de a ferramenta
-ter sido usada em algumas sessões reais, quando ficar claro quais
-efeitos/roteamentos são realmente úteis. Fazer especulativamente antes
-de saber o que precisa é receita pra construir features que ninguém usa.
+**Aceite:** uma cena real é preparada e executada pelo checkout Dev no
+notebook, incluindo transição e tail, com controle pelo tablet.
 
-**Compatibilidade**: cenas "simples" (camadas planas do MVP) continuam
-suportadas — nova UI é opt-in, cena antiga é interpretada como grafo
-trivial (todas as camadas → mixer master → output).
+## Débito operacional posterior
 
-### Multi-usuário / co-mestrar
+Limite de upload, decodificação fora do event loop, cache LRU, estados de erro
+da interface e responsividade do mapa permanecem registrados, mas só entram
+na linha ativa quando o teste real demonstrar sua prioridade.
 
-Autenticação leve, permissões por cena. Só faz sentido em campanhas com
-mais de um mestre — provavelmente nunca.
+## R2.3 — Mixer operacional — conclusão do M15
 
-### Ferramentas de sessão adicionais
+- faders de volume e pan na interface;
+- controles consistentes em `/` e no painel do `/map`;
+- feedback de falha em play, stop e alterações de parâmetros;
+- grupos simples de música, ambiente e SFX;
+- volume por grupo persistido na cena;
+- nomes acessíveis e operação por teclado nos controles críticos.
 
-- Timer de round de combate visível na TV.
-- Iniciativa tracker integrado (arrastar fichas de jogadores/inimigos).
-- Overlay de imagens/mapas na TV (integração com OBS ou canvas próprio).
-- Dice roller sincronizado (mestre rola, mostra na TV).
+## R2.4 — Integração OBS
 
-Nenhuma dessas é essencial — o Loremaster foca em áudio/luz/ambiente.
-Se virarem escopo, avaliar antes se não vale integrar ferramentas
-existentes (Owlbear Rodeo, Roll20) em vez de reimplementar.
+- conexão configurável via OBS WebSocket;
+- associação entre cena do Loremaster e cena do OBS;
+- troca automática em `ScenePlaybackStarted`;
+- falha do OBS não interrompe o áudio;
+- suporte posterior a overlays de mapas e imagens.
+
+## R2.5 — Iluminação e automação
+
+Entregas separadas, nesta ordem:
+
+1. Home Assistant para cenas de iluminação;
+2. presets de ambiente vinculados às cenas;
+3. MQTT apenas se um dispositivo ou fluxo real exigir a ponte.
+
+## R2.6 — Sound design incremental
+
+1. buses;
+2. filtros e EQ simples;
+3. ducking/sidechain;
+4. reverb e delay;
+5. somente depois avaliar um editor completo em DAG.
+
+Cenas simples permanecem compatíveis. O grafo avançado não será construído
+antes de algumas sessões reais indicarem quais roteamentos são úteis.
+
+## Manutenção dos assets frontend
+
+O app não usa CDN. Vue, Vue Flow e wavesurfer ficam em
+`src/loremaster/web/vendor/`. Uma atualização deve substituir os arquivos pelas
+distribuições oficiais, abrir `/` e `/map` e confirmar no DevTools que nenhuma
+requisição sai para domínio externo. Os smoke tests headless verificam que os
+assets referenciados continuam locais e disponíveis.

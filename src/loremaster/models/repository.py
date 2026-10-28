@@ -24,6 +24,10 @@ from loremaster.models.scene import (
 )
 
 
+class InvalidReferenceError(ValueError):
+    """A scene payload points to audio or another scene that does not exist."""
+
+
 # ---- OnEnd (de)serialization -------------------------------------------------
 
 
@@ -113,6 +117,7 @@ def _audio_file_to_pydantic(row: AudioFileRow) -> AudioFile:
 
 
 async def create_scene(session: AsyncSession, payload: SceneCreate) -> Scene:
+    await _validate_scene_references(session, payload.layers, payload.on_end)
     now = datetime.now(UTC)
     scene_id = uuid4()
     row = SceneRow(
@@ -151,6 +156,7 @@ async def update_scene(session: AsyncSession, scene_id: UUID, payload: SceneUpda
     row = result.scalar_one_or_none()
     if row is None:
         return None
+    await _validate_scene_references(session, payload.layers, payload.on_end)
     if payload.name is not None:
         row.name = payload.name
     if payload.description is not None:
@@ -168,6 +174,13 @@ async def delete_scene(session: AsyncSession, scene_id: UUID) -> bool:
     row = await session.get(SceneRow, str(scene_id))
     if row is None:
         return False
+    result = await session.execute(select(SceneRow.id, SceneRow.on_end_json))
+    for source_id, raw_policy in result:
+        if source_id == str(scene_id):
+            continue
+        policy = json.loads(raw_policy)
+        if policy.get("type") == "goto" and policy.get("scene_id") == str(scene_id):
+            raise InvalidReferenceError(f"scene is referenced by transition from {source_id}")
     await session.delete(row)
     await session.commit()
     return True
@@ -193,6 +206,27 @@ def _layer_config_to_row(layer: LayerConfig, scene_id: UUID, position: int) -> L
         loop_start_ms=layer.loop_start_ms,
         loop_end_ms=layer.loop_end_ms,
     )
+
+
+async def _validate_scene_references(
+    session: AsyncSession,
+    layers: list[LayerConfig] | None,
+    on_end: OnEndPolicy | None,
+) -> None:
+    if layers is not None:
+        requested = {str(layer.audio_file_id) for layer in layers}
+        if requested:
+            result = await session.execute(
+                select(AudioFileRow.id).where(AudioFileRow.id.in_(requested))
+            )
+            existing = set(result.scalars())
+            missing = sorted(requested - existing)
+            if missing:
+                raise InvalidReferenceError(f"audio files not found: {', '.join(missing)}")
+    if isinstance(on_end, OnEndGoto):
+        target = await session.get(SceneRow, str(on_end.scene_id))
+        if target is None:
+            raise InvalidReferenceError(f"transition target scene not found: {on_end.scene_id}")
 
 
 def _scene_row_to_pydantic(row: SceneRow) -> Scene:
