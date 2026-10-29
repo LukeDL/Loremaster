@@ -55,6 +55,61 @@ def test_create_scene_and_retrieve(client):
     assert fetched["id"] == scene["id"]
 
 
+def test_mixer_groups_roundtrip_and_control_active_scene(client):
+    audio = client.post(
+        "/api/uploads", files={"file": ("m.wav", _wav_bytes(), "audio/wav")}
+    ).json()
+    scene = client.post(
+        "/api/scenes",
+        json={
+            "name": "Mixer",
+            "group_volumes": {"music": 0.8, "ambience": 0.6, "sfx": 0.9},
+            "layers": [
+                {
+                    "audio_file_id": audio["id"],
+                    "group": "music",
+                    "volume": 0.5,
+                    "pan_lr": -0.25,
+                }
+            ],
+        },
+    ).json()
+
+    assert scene["group_volumes"] == {"music": 0.8, "ambience": 0.6, "sfx": 0.9}
+    assert scene["layers"][0]["group"] == "music"
+    assert scene["layers"][0]["pan_lr"] == pytest.approx(-0.25)
+    assert client.post("/api/playback/play", json={"scene_id": scene["id"]}).status_code == 202
+
+    changed = client.patch("/api/playback/groups/music", json={"volume": 0.4})
+    assert changed.status_code == 202, changed.text
+    state = client.get("/api/playback/state").json()
+    assert state["group_volumes"]["music"] == pytest.approx(0.4)
+
+    persisted = client.get(f"/api/scenes/{scene['id']}").json()
+    assert persisted["group_volumes"]["music"] == pytest.approx(0.4)
+
+    layer_id = scene["layers"][0]["id"]
+    adjusted = client.patch(
+        f"/api/playback/layers/{layer_id}",
+        json={"volume": 0.25, "pan_lr": 0.5},
+    )
+    assert adjusted.status_code == 202, adjusted.text
+    engine = client.app.state.engine
+    scoped = f"{scene['id']}::{layer_id}"
+    assert engine.layer_volumes[-1] == (scoped, pytest.approx(0.1))
+    assert engine.layer_pans[-1] == (scoped, pytest.approx(0.5))
+
+
+def test_mixer_rejects_controls_without_matching_active_layer(client):
+    from uuid import uuid4
+
+    response = client.patch(
+        f"/api/playback/layers/{uuid4()}",
+        json={"volume": 0.5},
+    )
+    assert response.status_code == 404
+
+
 def test_create_scene_rejects_missing_audio_reference(client):
     from uuid import uuid4
 
@@ -142,6 +197,7 @@ def test_websocket_receives_state_snapshot(client):
         first = ws.receive_json()
         assert first["type"] == "state"
         assert "master_volume" in first
+        assert first["group_volumes"] == {"music": 1.0, "ambience": 1.0, "sfx": 1.0}
 
 
 def test_scene_position_patch_persists(client):

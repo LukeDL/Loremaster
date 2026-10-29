@@ -38,7 +38,7 @@ parte do foco de áudio, luz e ambientação.
 
 ## R2.1 — Base confiável e redução do débito técnico
 
-**Status:** concluído localmente; aguardando validação no notebook real.
+**Status:** concluído e validado no notebook real.
 
 Entregue:
 
@@ -64,12 +64,12 @@ Aceite automatizado:
 - uma cópia de banco legado é migrada sem perda e com backup verificável;
 - build de sdist/wheel e `git diff --check` passam.
 
-Gate restante: executar a R2.2 no notebook com cópia dos dados reais antes de
-considerar a base operacionalmente validada.
+Gate concluído pela R2.2 com cópia dos dados reais e dispositivo de áudio do
+notebook.
 
 ## R2.2 — Retorno à mesa
 
-**Status:** aguardando acesso ao notebook de desenvolvimento.
+**Status:** concluído.
 
 Objetivo: executar a aplicação diretamente do checkout no notebook e validar
 o comportamento em hardware real, sem antecipar infraestrutura de release.
@@ -90,6 +90,9 @@ candidate, rotação de logs e rollback automatizado.
 **Aceite:** uma cena real é preparada e executada pelo checkout Dev no
 notebook, incluindo transição e tail, com controle pelo tablet.
 
+Validação concluída no notebook de desenvolvimento com banco e áudios reais,
+incluindo mixer, transições, tail, controle pelo tablet e operação offline.
+
 ## Débito operacional posterior
 
 Limite de upload, decodificação fora do event loop, cache LRU, estados de erro
@@ -98,12 +101,22 @@ na linha ativa quando o teste real demonstrar sua prioridade.
 
 ## R2.3 — Mixer operacional — conclusão do M15
 
+**Status:** implementado localmente; aguardando validação no notebook.
+
+Entregue:
+
 - faders de volume e pan na interface;
 - controles consistentes em `/` e no painel do `/map`;
 - feedback de falha em play, stop e alterações de parâmetros;
 - grupos simples de música, ambiente e SFX;
 - volume por grupo persistido na cena;
-- nomes acessíveis e operação por teclado nos controles críticos.
+- nomes acessíveis e operação por teclado nos controles críticos;
+- migração de bancos existentes com todas as camadas no grupo `ambience` e
+  volumes de grupo em 100%.
+
+**Aceite:** executar uma cena com camadas nos três grupos, ajustar volume e pan
+em `/` e `/map`, recarregar a aplicação e confirmar a persistência dos volumes
+de grupo sem regressão nas transições e tails.
 
 ## R2.4 — Integração OBS
 

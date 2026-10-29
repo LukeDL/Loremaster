@@ -24,8 +24,8 @@ from loremaster.events import (
     VolumeChanged,
 )
 from loremaster.models.db import Database
-from loremaster.models.repository import get_audio_file, get_scene, list_scenes
-from loremaster.models.scene import OnEndGoto, Scene
+from loremaster.models.repository import get_audio_file, get_scene, list_scenes, update_scene
+from loremaster.models.scene import AudioGroup, GroupVolumes, OnEndGoto, Scene, SceneUpdate
 
 log = logging.getLogger(__name__)
 
@@ -74,6 +74,7 @@ class SceneService:
     async def _hydrate(self, scene: Scene) -> SceneSpec:
         """Load audio files referenced by a Scene into an engine-ready SceneSpec."""
         layer_specs: list[LayerSpec] = []
+        group_volumes = scene.group_volumes.model_dump()
         async with self.db.session() as sess:
             for layer in scene.layers:
                 audio = await get_audio_file(sess, layer.audio_file_id)
@@ -87,7 +88,7 @@ class SceneService:
                         id=str(layer.id),
                         data=loaded.data,
                         loop=layer.loop,
-                        volume=layer.volume,
+                        volume=layer.volume * group_volumes[layer.group],
                         pan_lr=layer.pan_lr,
                         fade_in_ms=layer.fade_in_ms,
                         fade_out_ms=layer.fade_out_ms,
@@ -99,7 +100,15 @@ class SceneService:
             type=scene.on_end.type,
             goto_scene_id=str(scene.on_end.scene_id) if isinstance(scene.on_end, OnEndGoto) else None,
         )
-        return SceneSpec(id=str(scene.id), name=scene.name, layers=layer_specs, on_end=on_end)
+        return SceneSpec(
+            id=str(scene.id),
+            name=scene.name,
+            layers=layer_specs,
+            layer_groups={str(layer.id): layer.group for layer in scene.layers},
+            layer_volumes={str(layer.id): layer.volume for layer in scene.layers},
+            group_volumes=group_volumes,
+            on_end=on_end,
+        )
 
     async def _resolve_by_str_id(self, scene_id_str: str) -> SceneSpec | None:
         try:
@@ -154,21 +163,44 @@ class SceneService:
         self.engine.set_master_volume(volume)
         self.bus.publish(VolumeChanged(target="master", volume=volume))
 
-    def set_layer_volume(self, layer_id: str, volume: float) -> None:
+    def set_layer_volume(self, layer_id: str, volume: float) -> bool:
         current = self.player.current_scene
-        if current is None:
-            return
+        if current is None or layer_id not in current.layer_volumes:
+            return False
+        current.layer_volumes[layer_id] = volume
+        group = current.layer_groups[layer_id]
+        effective_volume = volume * current.group_volumes[group]
         # Layer ids are scoped by scene in the engine
-        self.engine.set_layer_volume(f"{current.id}::{layer_id}", volume)
+        self.engine.set_layer_volume(f"{current.id}::{layer_id}", effective_volume)
         self.bus.publish(VolumeChanged(target=layer_id, volume=volume))
+        return True
 
-    def set_layer_pan(self, layer_id: str, pan_lr: float) -> None:
+    def set_layer_pan(self, layer_id: str, pan_lr: float) -> bool:
         current = self.player.current_scene
-        if current is None:
-            return
+        if current is None or layer_id not in current.layer_volumes:
+            return False
         # No dedicated bus event — pan changes propagate via the periodic
         # PlaybackStateSnapshot (layers[layer_id].pan_lr).
         self.engine.set_layer_pan(f"{current.id}::{layer_id}", pan_lr)
+        return True
+
+    async def set_group_volume(self, group: AudioGroup, volume: float) -> bool:
+        current = self.player.current_scene
+        if current is None:
+            return False
+        current.group_volumes[group] = volume
+        for layer_id, layer_group in current.layer_groups.items():
+            if layer_group != group:
+                continue
+            effective_volume = current.layer_volumes[layer_id] * volume
+            self.engine.set_layer_volume(f"{current.id}::{layer_id}", effective_volume)
+        async with self.db.session() as sess:
+            await update_scene(
+                sess,
+                UUID(current.id),
+                SceneUpdate(group_volumes=GroupVolumes(**current.group_volumes)),
+            )
+        return True
 
     # ---- State snapshot ------------------------------------------------------
 
@@ -180,6 +212,7 @@ class SceneService:
             "current_scene_id": current.id if current else None,
             "previous_scene_id": previous.id if previous else None,
             "master_volume": engine_snap["master_volume"],
+            "group_volumes": dict(current.group_volumes) if current else GroupVolumes().model_dump(),
             "layers": engine_snap["layers"],
             "xrun_count": engine_snap["xrun_count"],
         }

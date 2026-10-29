@@ -51,6 +51,11 @@ class SceneRow(Base):
     name: Mapped[str] = mapped_column(String(200))
     description: Mapped[str | None] = mapped_column(Text, default=None)
     on_end_json: Mapped[str] = mapped_column(Text)  # JSON serialized OnEndPolicy
+    group_volumes_json: Mapped[str] = mapped_column(
+        Text,
+        default='{"music":1.0,"ambience":1.0,"sfx":1.0}',
+        server_default='{"music":1.0,"ambience":1.0,"sfx":1.0}',
+    )
     # Campaign graph opt-in: False keeps the scene in the palette only
     is_on_map: Mapped[bool] = mapped_column(default=False)
     # Node position on the campaign graph — null means "place on next open slot"
@@ -78,6 +83,7 @@ class LayerRow(Base):
     position: Mapped[int]  # ordering within scene
     loop: Mapped[bool]
     volume: Mapped[float]
+    group_name: Mapped[str] = mapped_column(String(16), default="ambience", server_default="ambience")
     pan_lr: Mapped[float] = mapped_column(default=0.0, server_default="0.0")
     fade_in_ms: Mapped[int]
     fade_out_ms: Mapped[int]

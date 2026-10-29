@@ -71,8 +71,33 @@ const API = {
   },
   async stop() { return fetch("/api/playback/stop", { method: "POST" }); },
   async endScene() { return fetch("/api/playback/end_scene", { method: "POST" }); },
+  async patchLayer(layerId, values) {
+    return fetch(`/api/playback/layers/${layerId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(values),
+    });
+  },
+  async setGroupVolume(group, volume) {
+    return fetch(`/api/playback/groups/${group}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ volume }),
+    });
+  },
   async initialState() { return (await fetch("/api/playback/state")).json(); },
 };
+
+function debounceByKey(fn, ms) {
+  const timers = new Map();
+  return (key, ...args) => {
+    clearTimeout(timers.get(key));
+    timers.set(key, setTimeout(() => {
+      timers.delete(key);
+      fn(key, ...args);
+    }, ms));
+  };
+}
 
 const isCombatName = (name) => /combat|batalha|boss/i.test(name || "");
 
@@ -302,9 +327,10 @@ const NowPlayingPanel = defineComponent({
     scene: { type: Object, required: true },
     previousScene: { type: Object, default: null },
     engineLayers: { type: Object, required: true },  // scene_id::layer_id -> snapshot
+    groupVolumes: { type: Object, required: true },
   },
-  emits: ["stop", "end-scene"],
-  setup(props) {
+  emits: ["stop", "end-scene", "layer-mix", "group-volume"],
+  setup(props, { emit }) {
     // For each layer in the current scene, pull runtime info from engineLayers.
     const rows = computed(() => props.scene.layers.map((layer, i) => {
       const key = `${props.scene.id}::${layer.id}`;
@@ -314,13 +340,20 @@ const NowPlayingPanel = defineComponent({
         layerId: layer.id,
         audioFileId: layer.audio_file_id,
         label: `camada ${i + 1}`,
+        group: layer.group,
         state: runtime.state || "idle",
+        volume: (props.groupVolumes[layer.group] ?? 1.0) > 0
+          ? (runtime.volume ?? layer.volume) / (props.groupVolumes[layer.group] ?? 1.0)
+          : layer.volume,
+        pan_lr: runtime.pan_lr ?? layer.pan_lr,
         positionMs: runtime.position_ms || 0,
         loopStartMs: layer.loop_start_ms,
         loopEndMs: layer.loop_end_ms,
       };
     }));
-    return { rows };
+    const setLayer = debounceByKey((layerId, values) => emit("layer-mix", layerId, values), 100);
+    const setGroup = debounceByKey((group, volume) => emit("group-volume", group, volume), 100);
+    return { rows, setLayer, setGroup };
   },
   template: `
     <div class="np-header">
@@ -328,16 +361,35 @@ const NowPlayingPanel = defineComponent({
       <h2>{{ scene.name }}</h2>
       <div class="prev" v-if="previousScene">anterior: {{ previousScene.name }}</div>
     </div>
-    <LayerLiveView
-      v-for="row in rows"
-      :key="row.key"
-      :audio-file-id="row.audioFileId"
-      :label="row.label"
-      :layer-state="row.state"
-      :position-ms="row.positionMs"
-      :loop-start-ms="row.loopStartMs"
-      :loop-end-ms="row.loopEndMs"
-    />
+    <div class="map-group-mixer">
+      <label v-for="group in ['music', 'ambience', 'sfx']" :key="group">
+        <span>{{ group === 'music' ? 'música' : group === 'ambience' ? 'ambiente' : 'SFX' }}</span>
+        <input type="range" min="0" max="1" step="0.01"
+               :aria-label="'Volume do grupo ' + group" :value="groupVolumes[group]"
+               @input="setGroup(group, parseFloat($event.target.value))" />
+        <span>{{ Math.round(groupVolumes[group] * 100) }}%</span>
+      </label>
+    </div>
+    <div v-for="row in rows" :key="row.key" class="map-layer-mixer">
+      <LayerLiveView
+        :audio-file-id="row.audioFileId"
+        :label="row.label + ' · ' + row.group"
+        :layer-state="row.state"
+        :position-ms="row.positionMs"
+        :loop-start-ms="row.loopStartMs"
+        :loop-end-ms="row.loopEndMs"
+      />
+      <label>volume
+        <input type="range" min="0" max="1" step="0.01" :value="row.volume"
+               :aria-label="'Volume da ' + row.label"
+               @input="setLayer(row.layerId, { volume: parseFloat($event.target.value) })" />
+      </label>
+      <label>pan
+        <input type="range" min="-1" max="1" step="0.01" :value="row.pan_lr"
+               :aria-label="'Pan da ' + row.label"
+               @input="setLayer(row.layerId, { pan_lr: parseFloat($event.target.value) })" />
+      </label>
+    </div>
     <div class="np-actions">
       <button class="end-scene" @click="$emit('end-scene')">FIM DA CENA</button>
       <button @click="$emit('stop')">■ parar</button>
@@ -489,10 +541,12 @@ const App = defineComponent({
       current_scene_id: null,
       previous_scene_id: null,
       master_volume: 1.0,
+      group_volumes: { music: 1.0, ambience: 1.0, sfx: 1.0 },
       layers: {},
       xrun_count: 0,
     });
     const connected = ref(false);
+    const error = ref(null);
     const modalOpen = ref(false);
     const modalScene = ref(null);
     const nodeTypes = markRaw({ scene: SceneNode, stop: StopNode, start: StartNode });
@@ -559,7 +613,7 @@ const App = defineComponent({
       onEnd: scene.on_end,
       playing: scene.id === state.value.current_scene_id,
       isCombat: isCombatName(scene.name),
-      onPlay: () => API.play(scene.id),
+      onPlay: () => playScene(scene.id),
       onEdit: () => openEdit(scene),
       onRemoveFromMap: () => removeFromMap(scene),
     });
@@ -702,6 +756,31 @@ const App = defineComponent({
     const refreshUploads = async () => { uploads.value = await API.listUploads(); };
 
     // ---- Actions -----------------------------------------------------------
+
+    const reportFetch = async (response, action) => {
+      if (response.ok) return true;
+      const detail = await response.text().catch(() => response.statusText);
+      error.value = `${action}: ${response.status} ${detail}`;
+      return false;
+    };
+
+    const playScene = async (sceneId) => {
+      await reportFetch(await API.play(sceneId), "tocar cena");
+    };
+
+    const patchLayer = async (layerId, values) => {
+      await reportFetch(await API.patchLayer(layerId, values), "ajustar camada");
+    };
+
+    const patchGroup = async (group, volume) => {
+      state.value.group_volumes[group] = volume;
+      await reportFetch(await API.setGroupVolume(group, volume), `ajustar grupo ${group}`);
+    };
+
+    const stop = async () => { await reportFetch(await API.stop(), "parar reprodução"); };
+    const endScene = async () => {
+      await reportFetch(await API.endScene(), "encerrar cena");
+    };
 
     const onNodeDragStop = ({ node }) => {
       // Special nodes are client-only; persist their position in localStorage
@@ -889,6 +968,7 @@ const App = defineComponent({
               current_scene_id: msg.current_scene_id,
               previous_scene_id: msg.previous_scene_id,
               master_volume: msg.master_volume,
+              group_volumes: msg.group_volumes,
               layers: msg.layers || {},
               xrun_count: msg.xrun_count,
             };
@@ -930,15 +1010,14 @@ const App = defineComponent({
     );
 
     return {
-      scenes, uploads, nodeTypes, edgeTypes, connected, state,
+      scenes, uploads, nodeTypes, edgeTypes, connected, state, error,
       modalOpen, modalScene, paletteScenes, canvasRef,
       currentScene, previousScene, selectedEdgeId,
       defaultViewport, shouldFitView, onViewportChangeEnd,
       onNodeDragStop, onConnect, onEdgesChange, onEdgesDelete, onEdgeClick, onPaneClick, onNodesChange,
       addToMap, removeFromMap, openCreate, saveModal, deleteSelectedEdge,
       onPaletteDragStart, onCanvasDragOver, onCanvasDrop,
-      stop: () => API.stop(),
-      endScene: () => API.endScene(),
+      stop, endScene, patchLayer, patchGroup,
     };
   },
   template: `
@@ -961,6 +1040,10 @@ const App = defineComponent({
         >× remover conexão</button>
         <a href="/" style="color: var(--muted); font-size: 12px; text-decoration: none; margin-left: 8px;">↗ controle</a>
       </div>
+    </div>
+
+    <div v-if="error" class="map-error" role="alert">
+      <button @click="error = null" aria-label="Fechar erro">×</button>{{ error }}
     </div>
 
     <div class="workspace" :class="{ 'has-now-playing': !!currentScene }">
@@ -1029,8 +1112,11 @@ const App = defineComponent({
           :scene="currentScene"
           :previous-scene="previousScene"
           :engine-layers="state.layers || {}"
+          :group-volumes="state.group_volumes"
           @stop="stop"
           @end-scene="endScene"
+          @layer-mix="patchLayer"
+          @group-volume="patchGroup"
         />
       </aside>
     </div>

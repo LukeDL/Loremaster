@@ -57,11 +57,29 @@ async def _add_lookup_indexes(conn: AsyncConnection) -> None:
     await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_scenes_name ON scenes(name)"))
 
 
+async def _add_mixer_groups(conn: AsyncConnection) -> None:
+    await _add_column(
+        conn,
+        "scenes",
+        "group_volumes_json",
+        "TEXT NOT NULL DEFAULT '{}'",
+    )
+    initialize_groups = text(
+        "UPDATE scenes SET group_volumes_json = :volumes WHERE group_volumes_json = '{}'"
+    )
+    await conn.execute(
+        initialize_groups,
+        {"volumes": '{"music":1.0,"ambience":1.0,"sfx":1.0}'},
+    )
+    await _add_column(conn, "layers", "group_name", "VARCHAR(16) NOT NULL DEFAULT 'ambience'")
+
+
 MIGRATIONS = (
     Migration("001_add_loop_region_columns", _add_loop_region_columns),
     Migration("002_add_scene_entry", _add_scene_entry),
     Migration("003_add_layer_pan", _add_layer_pan),
     Migration("004_add_lookup_indexes", _add_lookup_indexes),
+    Migration("005_add_mixer_groups", _add_mixer_groups),
 )
 MIGRATION_VERSIONS = frozenset(migration.version for migration in MIGRATIONS)
 

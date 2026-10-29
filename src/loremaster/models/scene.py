@@ -27,6 +27,14 @@ OnEndPolicy = Annotated[
     Field(discriminator="type"),
 ]
 
+AudioGroup = Literal["music", "ambience", "sfx"]
+
+
+class GroupVolumes(BaseModel):
+    music: float = Field(default=1.0, ge=0.0, le=1.0)
+    ambience: float = Field(default=1.0, ge=0.0, le=1.0)
+    sfx: float = Field(default=1.0, ge=0.0, le=1.0)
+
 
 class AudioFile(BaseModel):
     id: UUID
@@ -50,6 +58,7 @@ class LayerConfig(BaseModel):
 
     id: UUID = Field(default_factory=uuid4)
     audio_file_id: UUID
+    group: AudioGroup = "ambience"
     loop: bool = True
     volume: float = Field(default=1.0, ge=0.0, le=1.0)
     # Stereo pan: -1 = full left, 0 = center, +1 = full right. Equal-power law.
@@ -65,6 +74,7 @@ class Scene(BaseModel):
     name: str
     description: str | None = None
     layers: list[LayerConfig] = Field(default_factory=list)
+    group_volumes: GroupVolumes = Field(default_factory=GroupVolumes)
     on_end: OnEndPolicy = Field(default_factory=OnEndReturnPrevious)
     is_on_map: bool = False
     graph_x: float | None = None
@@ -82,6 +92,7 @@ class SceneCreate(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     description: str | None = Field(default=None, max_length=2000)
     layers: list[LayerConfig] = Field(default_factory=list)
+    group_volumes: GroupVolumes = Field(default_factory=GroupVolumes)
     on_end: OnEndPolicy = Field(default_factory=OnEndReturnPrevious)
 
 
@@ -89,4 +100,5 @@ class SceneUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=200)
     description: str | None = Field(default=None, max_length=2000)
     layers: list[LayerConfig] | None = None
+    group_volumes: GroupVolumes | None = None
     on_end: OnEndPolicy | None = None

@@ -51,6 +51,9 @@ class SceneSpec:
     id: str
     name: str
     layers: list[LayerSpec] = field(default_factory=list)
+    layer_groups: dict[str, str] = field(default_factory=dict)
+    layer_volumes: dict[str, float] = field(default_factory=dict)
+    group_volumes: dict[str, float] = field(default_factory=dict)
     on_end: OnEnd = field(default_factory=OnEnd)
 
 
