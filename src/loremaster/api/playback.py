@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
 from loremaster.api.deps import get_scene_service
+from loremaster.models.scene import AudioGroup
 from loremaster.scene_service import SceneService
 
 router = APIRouter(prefix="/api/playback", tags=["playback"])
@@ -29,6 +30,10 @@ class LayerPatchRequest(BaseModel):
 
     volume: float | None = Field(default=None, ge=0.0, le=1.0)
     pan_lr: float | None = Field(default=None, ge=-1.0, le=1.0)
+
+
+class GroupVolumeRequest(BaseModel):
+    volume: float = Field(ge=0.0, le=1.0)
 
 
 @router.post("/play", status_code=status.HTTP_202_ACCEPTED)
@@ -72,10 +77,24 @@ async def patch_layer(
     payload: LayerPatchRequest,
     service: SceneService = Depends(get_scene_service),
 ) -> dict[str, str]:
+    found = True
     if payload.volume is not None:
-        service.set_layer_volume(layer_id, payload.volume)
+        found = service.set_layer_volume(layer_id, payload.volume) and found
     if payload.pan_lr is not None:
-        service.set_layer_pan(layer_id, payload.pan_lr)
+        found = service.set_layer_pan(layer_id, payload.pan_lr) and found
+    if not found:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "active layer not found")
+    return {"status": "ok"}
+
+
+@router.patch("/groups/{group}", status_code=status.HTTP_202_ACCEPTED)
+async def patch_group(
+    group: AudioGroup,
+    payload: GroupVolumeRequest,
+    service: SceneService = Depends(get_scene_service),
+) -> dict[str, str]:
+    if not await service.set_group_volume(group, payload.volume):
+        raise HTTPException(status.HTTP_409_CONFLICT, "no active scene")
     return {"status": "ok"}
 
 

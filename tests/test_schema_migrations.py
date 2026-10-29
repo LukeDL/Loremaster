@@ -106,16 +106,24 @@ async def test_legacy_database_is_backed_up_and_migrated_without_data_loss(tmp_p
         layer_columns = {row[1] for row in connection.execute("PRAGMA table_info(layers)")}
         scene_columns = {row[1] for row in connection.execute("PRAGMA table_info(scenes)")}
         layer = connection.execute(
-            "SELECT id, scene_id, audio_file_id, volume, pan_lr, loop_start_ms, loop_end_ms "
+            "SELECT id, scene_id, audio_file_id, volume, pan_lr, loop_start_ms, loop_end_ms, "
+            "group_name "
             "FROM layers"
         ).fetchone()
-        scene = connection.execute("SELECT id, name, is_entry FROM scenes").fetchone()
+        scene = connection.execute(
+            "SELECT id, name, is_entry, group_volumes_json FROM scenes"
+        ).fetchone()
         applied = {row[0] for row in connection.execute("SELECT version FROM schema_migrations")}
 
-    assert {"pan_lr", "loop_start_ms", "loop_end_ms"} <= layer_columns
-    assert "is_entry" in scene_columns
-    assert layer == ("l1", "s1", "a1", 0.5, 0.0, None, None)
-    assert scene == ("s1", "Rain", 0)
+    assert {"pan_lr", "loop_start_ms", "loop_end_ms", "group_name"} <= layer_columns
+    assert {"is_entry", "group_volumes_json"} <= scene_columns
+    assert layer == ("l1", "s1", "a1", 0.5, 0.0, None, None, "ambience")
+    assert scene == (
+        "s1",
+        "Rain",
+        0,
+        '{"music":1.0,"ambience":1.0,"sfx":1.0}',
+    )
     assert applied == MIGRATION_VERSIONS
     backups = list((tmp_path / "backups").glob("legacy-pre-migration-*.db"))
     assert len(backups) == 1

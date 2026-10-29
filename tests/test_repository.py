@@ -20,6 +20,7 @@ from loremaster.models.repository import (
     update_scene,
 )
 from loremaster.models.scene import (
+    GroupVolumes,
     LayerConfig,
     OnEndGoto,
     OnEndReturnPrevious,
@@ -73,9 +74,16 @@ async def test_scene_create_and_retrieve(db, audio_file):
         payload = SceneCreate(
             name="Forest exploration",
             description="Calm forest ambience",
+            group_volumes=GroupVolumes(music=0.8, ambience=0.6, sfx=0.9),
             layers=[
-                LayerConfig(audio_file_id=audio_file.id, loop=True, volume=0.7, fade_in_ms=800),
-                LayerConfig(audio_file_id=audio_file.id, loop=True, volume=0.4),
+                LayerConfig(
+                    audio_file_id=audio_file.id,
+                    group="music",
+                    loop=True,
+                    volume=0.7,
+                    fade_in_ms=800,
+                ),
+                LayerConfig(audio_file_id=audio_file.id, group="sfx", loop=True, volume=0.4),
             ],
             on_end=OnEndReturnPrevious(),
         )
@@ -83,12 +91,16 @@ async def test_scene_create_and_retrieve(db, audio_file):
         assert created.name == "Forest exploration"
         assert len(created.layers) == 2
         assert created.layers[0].volume == 0.7
+        assert created.layers[0].group == "music"
+        assert created.group_volumes.music == 0.8
         assert created.on_end.type == "return_previous"
 
         fetched = await get_scene(sess, created.id)
         assert fetched is not None
         assert fetched.id == created.id
         assert len(fetched.layers) == 2
+        assert fetched.layers[1].group == "sfx"
+        assert fetched.group_volumes.ambience == 0.6
 
 
 @pytest.mark.asyncio

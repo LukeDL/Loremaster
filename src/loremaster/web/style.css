@@ -118,6 +118,32 @@ main {
 .layer-row .state.playing { background: rgba(63, 185, 80, 0.2); color: var(--success); }
 .layer-row .state.fading_out { background: rgba(248, 81, 73, 0.2); color: var(--danger); }
 
+.layer-values {
+  width: 92px;
+  display: flex;
+  flex-direction: column;
+  text-align: right;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.group-mixer,
+.group-editor {
+  display: grid;
+  gap: 8px;
+  padding: 12px 0;
+}
+
+.group-mixer label,
+.group-editor label {
+  display: grid;
+  grid-template-columns: 72px 1fr 42px;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
 input[type="range"] {
   width: 100%;
   accent-color: var(--accent);

@@ -60,6 +60,7 @@ class PlaybackStateSnapshot(_EventBase):
     current_scene_id: UUID | None
     previous_scene_id: UUID | None
     master_volume: float
+    group_volumes: dict[str, float]
     layers: dict[str, dict[str, Any]]
     xrun_count: int
 

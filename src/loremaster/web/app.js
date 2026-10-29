@@ -48,6 +48,20 @@ const API = {
       body: JSON.stringify({ target, volume }),
     });
   },
+  async patchLayer(layerId, values) {
+    return fetch(`/api/playback/layers/${layerId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(values),
+    });
+  },
+  async setGroupVolume(group, volume) {
+    return fetch(`/api/playback/groups/${group}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ volume }),
+    });
+  },
   async initialState() { return (await fetch("/api/playback/state")).json(); },
 };
 
@@ -56,6 +70,17 @@ function debounce(fn, ms) {
   return (...args) => {
     clearTimeout(t);
     t = setTimeout(() => fn(...args), ms);
+  };
+}
+
+function debounceByKey(fn, ms) {
+  const timers = new Map();
+  return (key, ...args) => {
+    clearTimeout(timers.get(key));
+    timers.set(key, setTimeout(() => {
+      timers.delete(key);
+      fn(key, ...args);
+    }, ms));
   };
 }
 
@@ -83,6 +108,7 @@ const store = reactive({
     current_scene_id: null,
     previous_scene_id: null,
     master_volume: 1.0,
+    group_volumes: { music: 1.0, ambience: 1.0, sfx: 1.0 },
     layers: {},
     xrun_count: 0,
   },
@@ -131,6 +157,7 @@ function connectWebSocket() {
           store.state.current_scene_id = msg.current_scene_id;
           store.state.previous_scene_id = msg.previous_scene_id;
           store.state.master_volume = msg.master_volume;
+          store.state.group_volumes = msg.group_volumes;
           store.state.layers = msg.layers;
           store.state.xrun_count = msg.xrun_count;
         }
@@ -155,22 +182,32 @@ const ScenesView = {
       store.scenes.find((s) => s.id === store.state.previous_scene_id) || null
     );
 
-    const localLayerVol = ref({});
+    const localLayerMix = ref({});
     watch(() => store.state.layers, (layers) => {
       for (const [lid, info] of Object.entries(layers)) {
         const bare = lid.includes("::") ? lid.split("::").slice(1).join("::") : lid;
         if (bare.includes("__old_")) continue;  // skip crossfade ghost layers
-        if (localLayerVol.value[bare] == null ||
-            Math.abs(localLayerVol.value[bare] - info.volume) > 0.01) {
-          localLayerVol.value[bare] = info.volume;
-        }
+        const layer = currentScene.value?.layers.find((item) => item.id === bare);
+        if (!layer) continue;
+        const groupVolume = store.state.group_volumes[layer.group] ?? 1.0;
+        localLayerMix.value[bare] = {
+          volume: groupVolume > 0 ? info.volume / groupVolume : layer.volume,
+          pan_lr: info.pan_lr ?? layer.pan_lr,
+        };
       }
     }, { deep: true });
 
-    const pushLayerVol = debounce((layerId, v) => API.setVolume(layerId, v), 100);
+    const pushLayerMix = debounceByKey(async (layerId, values) => {
+      const res = await API.patchLayer(layerId, values);
+      await reportFetch(res, "ajustar camada");
+    }, 100);
     const setLayerVol = (layerId, v) => {
-      localLayerVol.value[layerId] = v;
-      pushLayerVol(layerId, v);
+      localLayerMix.value[layerId] = { ...localLayerMix.value[layerId], volume: v };
+      pushLayerMix(layerId, { volume: v });
+    };
+    const setLayerPan = (layerId, v) => {
+      localLayerMix.value[layerId] = { ...localLayerMix.value[layerId], pan_lr: v };
+      pushLayerMix(layerId, { pan_lr: v });
     };
 
     const currentLayerRows = computed(() => {
@@ -183,13 +220,22 @@ const ScenesView = {
           id: layer.id,
           index: i + 1,
           state: runtime.state || "idle",
-          volume: localLayerVol.value[layer.id] ?? layer.volume,
+          volume: localLayerMix.value[layer.id]?.volume ?? layer.volume,
+          pan_lr: localLayerMix.value[layer.id]?.pan_lr ?? layer.pan_lr,
+          group: layer.group,
           loop: layer.loop,
         };
       });
     });
 
-    const playScene = async (sceneId) => { await API.play(sceneId); };
+    const playScene = async (sceneId) => {
+      await reportFetch(await API.play(sceneId), "tocar cena");
+    };
+
+    const setGroupVol = debounceByKey(async (group, volume) => {
+      store.state.group_volumes[group] = volume;
+      await reportFetch(await API.setGroupVolume(group, volume), `ajustar grupo ${group}`);
+    }, 100);
 
     const deleteScene = async (scene) => {
       if (!confirm(`Deletar cena "${scene.name}"?`)) return;
@@ -199,7 +245,7 @@ const ScenesView = {
 
     return {
       store, currentScene, previousScene, currentLayerRows,
-      playScene, deleteScene, setLayerVol, goto,
+      playScene, deleteScene, setLayerVol, setLayerPan, setGroupVol, goto,
     };
   },
   template: `
@@ -209,19 +255,35 @@ const ScenesView = {
           <div class="section-title">tocando</div>
           <h2>{{ currentScene.name }}</h2>
           <div class="prev" v-if="previousScene">anterior: {{ previousScene.name }}</div>
+          <div class="group-mixer" aria-label="Volumes dos grupos">
+            <label v-for="group in ['music', 'ambience', 'sfx']" :key="group">
+              <span>{{ group === 'music' ? 'música' : group === 'ambience' ? 'ambiente' : 'SFX' }}</span>
+              <input type="range" min="0" max="1" step="0.01"
+                     :aria-label="'Volume do grupo ' + group"
+                     :value="store.state.group_volumes[group]"
+                     @input="setGroupVol(group, parseFloat($event.target.value))" />
+              <span>{{ Math.round(store.state.group_volumes[group] * 100) }}%</span>
+            </label>
+          </div>
           <div v-for="row in currentLayerRows" :key="row.id" class="layer-row">
             <div>
               <div class="label">
-                camada {{ row.index }}
+                camada {{ row.index }} · {{ row.group }}
                 <span class="state" :class="row.state">{{ row.state }}</span>
                 <span v-if="row.loop" style="color: var(--muted); font-size: 10px;">↻</span>
               </div>
               <input type="range" min="0" max="1" step="0.01"
+                     :aria-label="'Volume da camada ' + row.index"
                      :value="row.volume"
                      @input="setLayerVol(row.id, parseFloat($event.target.value))" />
+              <input type="range" min="-1" max="1" step="0.01"
+                     :aria-label="'Pan da camada ' + row.index"
+                     :value="row.pan_lr"
+                     @input="setLayerPan(row.id, parseFloat($event.target.value))" />
             </div>
-            <div style="width: 40px; text-align: right; color: var(--muted); font-size: 12px;">
-              {{ Math.round(row.volume * 100) }}%
+            <div class="layer-values">
+              <span>{{ Math.round(row.volume * 100) }}%</span>
+              <span>pan {{ row.pan_lr > 0 ? '+' : '' }}{{ row.pan_lr.toFixed(2) }}</span>
             </div>
           </div>
         </template>
@@ -243,7 +305,9 @@ const ScenesView = {
         <div v-for="scene in store.scenes" :key="scene.id"
              class="scene-card"
              :class="{ playing: currentScene && scene.id === currentScene.id }">
-          <div @click="playScene(scene.id)" style="flex: 1;">
+          <div @click="playScene(scene.id)" @keydown.enter="playScene(scene.id)"
+               @keydown.space.prevent="playScene(scene.id)" role="button" tabindex="0"
+               :aria-label="'Tocar cena ' + scene.name" style="flex: 1;">
             <div class="name">{{ scene.name }}</div>
             <div class="meta">
               {{ scene.layers.length }} camada(s) ·
@@ -347,6 +411,7 @@ const EditorView = {
       name: "",
       description: "",
       layers: [],  // [{audio_file_id, loop, volume, fade_in_ms, fade_out_ms, loop_start_ms, loop_end_ms}]
+      group_volumes: { music: 1.0, ambience: 1.0, sfx: 1.0 },
       on_end: { type: "return_previous" },  // or {type:"goto", scene_id} or {type:"stop"}
     });
     const saving = ref(false);
@@ -359,11 +424,14 @@ const EditorView = {
         const scene = await API.getScene(store.editingSceneId);
         form.name = scene.name;
         form.description = scene.description || "";
+        form.group_volumes = { ...scene.group_volumes };
         form.layers = scene.layers.map((l) => ({
           id: l.id,
           audio_file_id: l.audio_file_id,
           loop: l.loop,
           volume: l.volume,
+          pan_lr: l.pan_lr,
+          group: l.group,
           fade_in_ms: l.fade_in_ms,
           fade_out_ms: l.fade_out_ms,
           loop_start_ms: l.loop_start_ms ?? null,
@@ -374,6 +442,7 @@ const EditorView = {
         form.name = "";
         form.description = "";
         form.layers = [];
+        form.group_volumes = { music: 1.0, ambience: 1.0, sfx: 1.0 };
         form.on_end = { type: "return_previous" };
       }
     };
@@ -387,6 +456,8 @@ const EditorView = {
         audio_file_id: firstFile ? firstFile.id : "",
         loop: true,
         volume: 0.8,
+        pan_lr: 0.0,
+        group: "ambience",
         fade_in_ms: 500,
         fade_out_ms: 500,
         loop_start_ms: null,
@@ -434,6 +505,7 @@ const EditorView = {
         name: form.name.trim(),
         description: form.description.trim() || null,
         layers: form.layers,
+        group_volumes: form.group_volumes,
         on_end: form.on_end,
       };
       const res = store.editingSceneId
@@ -493,6 +565,16 @@ const EditorView = {
 
       <div class="section-title" style="margin-top: 20px;">camadas ({{ form.layers.length }})</div>
 
+      <div class="group-editor">
+        <label v-for="group in ['music', 'ambience', 'sfx']" :key="group">
+          {{ group === 'music' ? 'música' : group === 'ambience' ? 'ambiente' : 'SFX' }}
+          <input type="range" min="0" max="1" step="0.01"
+                 v-model.number="form.group_volumes[group]"
+                 :aria-label="'Volume inicial do grupo ' + group" />
+          {{ Math.round(form.group_volumes[group] * 100) }}%
+        </label>
+      </div>
+
       <div v-if="store.uploads.length === 0" class="empty-state">
         nenhum arquivo de áudio disponível —
         <a href="#" @click.prevent="goto('uploads')" style="color: var(--accent);">faça upload primeiro</a>
@@ -510,9 +592,24 @@ const EditorView = {
           </select>
         </div>
         <div class="form-field">
+          <label>grupo</label>
+          <select v-model="layer.group">
+            <option value="music">música</option>
+            <option value="ambience">ambiente</option>
+            <option value="sfx">SFX</option>
+          </select>
+        </div>
+        <div class="form-field">
           <label>
             <input type="range" min="0" max="1" step="0.01" v-model.number="layer.volume" />
             volume: {{ Math.round(layer.volume * 100) }}%
+          </label>
+        </div>
+        <div class="form-field">
+          <label>
+            <input type="range" min="-1" max="1" step="0.01"
+                   v-model.number="layer.pan_lr" :aria-label="'Pan da camada ' + (i + 1)" />
+            pan: {{ layer.pan_lr > 0 ? '+' : '' }}{{ layer.pan_lr.toFixed(2) }}
           </label>
         </div>
         <div class="form-inline">
@@ -565,15 +662,17 @@ const App = {
     watch(() => store.state.master_volume, (v) => {
       if (Math.abs(v - localMaster.value) > 0.01) localMaster.value = v;
     });
-    const pushMaster = debounce((v) => API.setVolume("master", v), 100);
+    const pushMaster = debounce(async (v) => {
+      await reportFetch(await API.setVolume("master", v), "ajustar volume master");
+    }, 100);
     watch(localMaster, (v) => pushMaster(v));
 
     const currentScene = computed(() =>
       store.scenes.find((s) => s.id === store.state.current_scene_id) || null
     );
 
-    const stopAll = async () => { await API.stop(); };
-    const endScene = async () => { await API.endScene(); };
+    const stopAll = async () => { await reportFetch(await API.stop(), "parar reprodução"); };
+    const endScene = async () => { await reportFetch(await API.endScene(), "encerrar cena"); };
 
     onMounted(async () => {
       disconnectWs = connectWebSocket();
@@ -623,7 +722,8 @@ const App = {
     <footer>
       <div class="master-volume">
         <span>master</span>
-        <input type="range" min="0" max="1" step="0.01" v-model.number="localMaster" />
+        <input type="range" min="0" max="1" step="0.01" v-model.number="localMaster"
+               aria-label="Volume master" />
         <span>{{ Math.round(localMaster * 100) }}%</span>
       </div>
       <div class="footer-buttons">

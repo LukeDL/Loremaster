@@ -13,6 +13,7 @@ from sqlalchemy.orm import selectinload
 from loremaster.models.db import AudioFileRow, LayerRow, SceneRow
 from loremaster.models.scene import (
     AudioFile,
+    GroupVolumes,
     LayerConfig,
     OnEndGoto,
     OnEndPolicy,
@@ -125,6 +126,7 @@ async def create_scene(session: AsyncSession, payload: SceneCreate) -> Scene:
         name=payload.name,
         description=payload.description,
         on_end_json=_on_end_to_json(payload.on_end),
+        group_volumes_json=payload.group_volumes.model_dump_json(),
         created_at=now,
         updated_at=now,
     )
@@ -163,6 +165,8 @@ async def update_scene(session: AsyncSession, scene_id: UUID, payload: SceneUpda
         row.description = payload.description
     if payload.on_end is not None:
         row.on_end_json = _on_end_to_json(payload.on_end)
+    if payload.group_volumes is not None:
+        row.group_volumes_json = payload.group_volumes.model_dump_json()
     if payload.layers is not None:
         row.layers = [_layer_config_to_row(layer, scene_id, i) for i, layer in enumerate(payload.layers)]
     row.updated_at = datetime.now(UTC)
@@ -200,6 +204,7 @@ def _layer_config_to_row(layer: LayerConfig, scene_id: UUID, position: int) -> L
         position=position,
         loop=layer.loop,
         volume=layer.volume,
+        group_name=layer.group,
         pan_lr=layer.pan_lr,
         fade_in_ms=layer.fade_in_ms,
         fade_out_ms=layer.fade_out_ms,
@@ -235,6 +240,7 @@ def _scene_row_to_pydantic(row: SceneRow) -> Scene:
         name=row.name,
         description=row.description,
         on_end=_on_end_from_json(row.on_end_json),
+        group_volumes=GroupVolumes.model_validate_json(row.group_volumes_json),
         is_on_map=row.is_on_map,
         graph_x=row.graph_x,
         graph_y=row.graph_y,
@@ -243,6 +249,7 @@ def _scene_row_to_pydantic(row: SceneRow) -> Scene:
             LayerConfig(
                 id=UUID(layer.id),
                 audio_file_id=UUID(layer.audio_file_id),
+                group=layer.group_name,
                 loop=layer.loop,
                 volume=layer.volume,
                 pan_lr=layer.pan_lr,

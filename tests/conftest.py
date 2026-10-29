@@ -24,6 +24,7 @@ class FakeEngine:
         self.played: list[str] = []
         self.faded_out: list[str] = []
         self.jumped_to_tail: list[tuple[str, str, int]] = []
+        self.layer_volumes: list[tuple[str, float]] = []
         self.layer_pans: list[tuple[str, float]] = []
         self._master_volume = 1.0
 
@@ -41,7 +42,8 @@ class FakeEngine:
     def jump_to_tail(self, layer_id, tail_layer_id, tail_fade_ms=300) -> None:
         self.jumped_to_tail.append((layer_id, tail_layer_id, tail_fade_ms))
 
-    def set_layer_volume(self, layer_id, volume) -> None: ...
+    def set_layer_volume(self, layer_id, volume) -> None:
+        self.layer_volumes.append((layer_id, volume))
 
     def set_layer_pan(self, layer_id, pan_lr) -> None:
         self.layer_pans.append((layer_id, pan_lr))

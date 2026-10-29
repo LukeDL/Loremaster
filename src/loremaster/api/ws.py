@@ -66,6 +66,7 @@ class WsBroadcaster:
             current_scene_id=snap["current_scene_id"],
             previous_scene_id=snap["previous_scene_id"],
             master_volume=snap["master_volume"],
+            group_volumes=snap["group_volumes"],
             layers=snap["layers"],
             xrun_count=snap["xrun_count"],
         ).model_dump(mode="json")
