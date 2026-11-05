@@ -33,8 +33,10 @@ Pendências herdadas:
 - buses, efeitos e sound design avançado;
 - validação em sessões reais e empacotamento operacional.
 
-Multiusuário, iniciativa, dice roller e timer permanecem estacionados: não são
-parte do foco de áudio, luz e ambientação.
+Iniciativa, dice roller e timer permanecem estacionados: não são parte do foco
+de áudio, luz e ambientação. Multiusuário passa a ter um destino restrito no
+módulo de personagens descrito em R3, sem entrar na linha ativa antes da
+validação da R2.3.
 
 ## R2.1 — Base confiável e redução do débito técnico
 
@@ -144,6 +146,53 @@ Entregas separadas, nesta ordem:
 
 Cenas simples permanecem compatíveis. O grafo avançado não será construído
 antes de algumas sessões reais indicarem quais roteamentos são úteis.
+
+## R3 — Personagens da party
+
+**Status:** planejado; não ativo enquanto a R2.3 não concluir o aceite no
+notebook.
+
+Objetivo: permitir que cada jogador crie, evolua e use seu personagem no
+Loremaster, com progressão completa do nível 1 ao 20 segundo D&D 5e 2024. O
+suporte a D&D 5e 2014 será acrescentado depois sem misturar regras das duas
+edições.
+
+Decisões de produto:
+
+- acesso inicial pela rede local, no navegador de cada jogador;
+- arquitetura preparada para autenticação e acesso remoto posteriores, sem
+  expor a instalação local à internet nesta etapa;
+- criação guiada, ficha digital jogável e progressão até o nível 20;
+- regras, conteúdo e dados do personagem separados: cada campanha fixa a
+  edição e os pacotes de conteúdo permitidos;
+- suporte explícito a conteúdo oficial autorizado e homebrew, com indicação da
+  origem de cada opção;
+- nenhum texto proprietário de livro será distribuído com o aplicativo sem
+  licença; o núcleo pode incluir apenas conteúdo cuja licença permita a
+  redistribuição e aceitar pacotes privados fornecidos pelo mestre;
+- escolhas inválidas devem ser explicadas e bloqueadas no fluxo guiado, sem
+  impedir que o mestre aplique uma exceção auditável à campanha.
+
+A entrega completa será construída em incrementos verticais utilizáveis:
+
+1. fundação de campanhas, jogadores, convites locais, personagens e pacotes de
+   regras versionados;
+2. criação de nível 1 com atributos, espécie, antecedente, classe, perícias,
+   equipamento e cálculos derivados;
+3. ficha jogável com recursos, descanso, pontos de vida, condições, ataques,
+   magias e inventário;
+4. progressão validada do nível 2 ao 20, incluindo multiclasse, talentos,
+   subclasses e preparação de magias;
+5. importação privada de conteúdo autorizado, homebrew e ferramentas de
+   revisão do mestre;
+6. suporte à edição 2014 por pacotes de regras e migração ou duplicação
+   explícita do personagem, sem conversão silenciosa.
+
+**Aceite do módulo:** quatro jogadores conseguem, a partir de convites locais,
+criar personagens legais de D&D 5e 2024, evoluí-los até o nível 20 por caminhos
+de classe única e multiclasse, usar as fichas durante a sessão e manter os dados
+após reiniciar o Loremaster. A suíte cobre cálculos, pré-requisitos e progressão
+sem depender do banco nem dos dados reais.
 
 ## Manutenção dos assets frontend
 
