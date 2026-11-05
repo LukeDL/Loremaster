@@ -16,32 +16,74 @@
         <button type="button" onclick="LoremasterAuth.logout()">sair</button>
       </div>
     </header>
-    <main class="admin-main">
-      <form id="create-campaign" class="auth-card campaign-create-card">
-        <div class="section-title">nova campanha</div>
-        <label>Nome <input name="name" required maxlength="200" /></label>
-        <label>
-          Pacote de regras
-          <select name="rule_pack_id" required></select>
-        </label>
-        <label>
-          Máximo de personagens por jogador (N)
-          <input name="max_characters_per_player" type="number" min="1" max="100" value="3" required />
-        </label>
-        <fieldset>
-          <legend>Jogadores</legend>
-          <div id="create-members" class="member-options"></div>
-        </fieldset>
-        <label class="checkbox"><input name="activate" type="checkbox" checked /> tornar ativa</label>
-        <p id="create-campaign-error" class="auth-error" role="alert" hidden></p>
-        <button class="primary" type="submit">criar campanha</button>
-      </form>
+    <main class="admin-main campaigns-main">
+      <section class="campaigns-toolbar" aria-labelledby="campaigns-heading">
+        <div>
+          <div class="section-title">administração</div>
+          <h2 id="campaigns-heading">Suas campanhas</h2>
+          <p>Selecione a campanha ativa e gerencie os jogadores sem sair desta visão.</p>
+        </div>
+        <button id="open-create-campaign" class="primary" type="button" disabled>+ nova campanha</button>
+      </section>
 
-      <section class="campaigns-panel">
-        <div class="section-title">campanhas</div>
-        <div id="campaigns-list"></div>
+      <section class="campaigns-panel" aria-live="polite">
+        <div id="campaigns-list" class="campaign-grid"></div>
       </section>
     </main>
+
+    <dialog id="create-campaign-dialog" class="app-dialog">
+      <form id="create-campaign" class="modal-card">
+        <div class="modal-heading">
+          <div>
+            <div class="section-title">nova campanha</div>
+            <h2>Criar campanha</h2>
+          </div>
+          <button class="icon-button" type="button" data-close-dialog aria-label="Fechar">×</button>
+        </div>
+        <div class="modal-body form-stack">
+          <label>Nome <input name="name" required maxlength="200" autofocus /></label>
+          <label>
+            Pacote de regras
+            <select name="rule_pack_id" required></select>
+          </label>
+          <label>
+            Máximo de personagens por jogador (N)
+            <input name="max_characters_per_player" type="number" min="1" max="100" value="3" required />
+          </label>
+          <fieldset>
+            <legend>Jogadores iniciais</legend>
+            <div id="create-members" class="member-options"></div>
+          </fieldset>
+          <label class="checkbox"><input name="activate" type="checkbox" checked /> tornar ativa</label>
+          <p id="create-campaign-error" class="auth-error" role="alert" hidden></p>
+        </div>
+        <div class="modal-actions">
+          <button type="button" data-close-dialog>cancelar</button>
+          <button class="primary" type="submit">criar campanha</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="members-dialog" class="app-dialog">
+      <form id="members-form" class="modal-card">
+        <div class="modal-heading">
+          <div>
+            <div class="section-title">jogadores</div>
+            <h2 id="members-dialog-title">Gerenciar membros</h2>
+          </div>
+          <button class="icon-button" type="button" data-close-dialog aria-label="Fechar">×</button>
+        </div>
+        <div class="modal-body">
+          <p class="modal-description">Escolha quais contas fazem parte desta campanha.</p>
+          <div id="edit-members" class="member-options member-picker"></div>
+          <p id="members-error" class="auth-error" role="alert" hidden></p>
+        </div>
+        <div class="modal-actions">
+          <button type="button" data-close-dialog>cancelar</button>
+          <button class="primary" type="submit">salvar membros</button>
+        </div>
+      </form>
+    </dialog>
     <script src="/auth-client.js"></script>
     <script src="/campaigns.js"></script>
   </body>
