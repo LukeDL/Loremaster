@@ -149,9 +149,8 @@ antes de algumas sessões reais indicarem quais roteamentos são úteis.
 
 ## R3 — Personagens da party
 
-**Status:** autenticação do primeiro MVP implementada localmente na branch
-`r3-characters`; aguardando validação no notebook. A linha operacional da R2.3
-permanece separada.
+**Status:** autenticação do primeiro MVP implementada e validada pelo mestre no
+notebook real. A linha operacional da R2.3 permanece separada.
 
 Objetivo: permitir que cada jogador crie, evolua e use seu personagem no
 Loremaster, com progressão completa do nível 1 ao 20 segundo D&D 5e 2024. O
@@ -219,6 +218,10 @@ Entregue no incremento de autenticação:
   personagens;
 - proteção CSRF nas operações mutáveis e migração com backup dos bancos
   existentes.
+
+Validação real concluída no notebook após `git pull`, sincronização das
+dependências, bootstrap da conta `gm` e execução do fluxo autenticado. O
+resultado foi confirmado pelo mestre como funcional.
 
 **Aceite do primeiro MVP:** o mestre executa o bootstrap local, entra com usuário
 e senha, cria quatro contas de jogador, visualiza todas as fichas e opera a
