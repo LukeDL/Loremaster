@@ -4,7 +4,15 @@
   const packSelect = form.elements.rule_pack_id;
   const createMembers = document.querySelector("#create-members");
   const list = document.querySelector("#campaigns-list");
+  const createDialog = document.querySelector("#create-campaign-dialog");
+  const membersDialog = document.querySelector("#members-dialog");
+  const membersForm = document.querySelector("#members-form");
+  const membersTitle = document.querySelector("#members-dialog-title");
+  const membersError = document.querySelector("#members-error");
+  const editMembers = document.querySelector("#edit-members");
+  const openCreateButton = document.querySelector("#open-create-campaign");
   let players = [];
+  let currentCampaignId = null;
 
   async function request(url, options = {}) {
     const response = await fetch(url, options);
@@ -25,7 +33,7 @@
     }
     for (const player of activePlayers) {
       const label = document.createElement("label");
-      label.className = "checkbox";
+      label.className = "checkbox member-option";
       const checkbox = document.createElement("input");
       checkbox.type = "checkbox";
       checkbox.value = player.id;
@@ -46,6 +54,35 @@
     element.className = className;
     element.addEventListener("click", action);
     return element;
+  }
+
+  function showDialog(dialog) {
+    if (typeof dialog.showModal === "function") dialog.showModal();
+    else dialog.setAttribute("open", "");
+  }
+
+  function closeDialog(dialog) {
+    if (typeof dialog.close === "function") dialog.close();
+    else dialog.removeAttribute("open");
+  }
+
+  function openMembersDialog(campaign) {
+    currentCampaignId = campaign.id;
+    membersTitle.textContent = campaign.name;
+    membersError.hidden = true;
+    memberOptions(editMembers, campaign.members.map((member) => member.id));
+    showDialog(membersDialog);
+  }
+
+  function campaignStat(label, value) {
+    const stat = document.createElement("div");
+    stat.className = "campaign-stat";
+    const caption = document.createElement("span");
+    caption.textContent = label;
+    const content = document.createElement("strong");
+    content.textContent = value;
+    stat.append(caption, content);
+    return stat;
   }
 
   async function loadCampaigns() {
@@ -74,25 +111,22 @@
       badge.textContent = campaign.is_active ? "ativa" : "inativa";
       heading.append(title, badge);
 
-      const meta = document.createElement("div");
-      meta.className = "meta";
-      meta.textContent = `${campaign.rule_pack.name} · versão ${campaign.rule_pack.version} · até ${campaign.max_characters_per_player} personagens por jogador`;
-
-      const members = document.createElement("div");
-      members.className = "member-options campaign-members";
-      memberOptions(members, campaign.members.map((member) => member.id));
+      const summary = document.createElement("div");
+      summary.className = "campaign-summary";
+      summary.append(
+        campaignStat("Regras", `${campaign.rule_pack.name} · v${campaign.rule_pack.version}`),
+        campaignStat("Personagens", `até ${campaign.max_characters_per_player} por jogador`),
+        campaignStat(
+          "Membros",
+          campaign.members.length
+            ? campaign.members.map((member) => member.username).join(", ")
+            : "nenhum jogador associado",
+        ),
+      );
 
       const actions = document.createElement("div");
       actions.className = "actions";
-      actions.append(actionButton("salvar jogadores", async () => {
-        const response = await request(`/api/admin/campaigns/${campaign.id}/members`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ member_ids: selectedMembers(members) }),
-        });
-        if (!response.ok) return alert("Não foi possível salvar os jogadores.");
-        await loadCampaigns();
-      }));
+      actions.append(actionButton("gerenciar membros", () => openMembersDialog(campaign)));
       if (!campaign.is_active) {
         actions.append(actionButton("tornar ativa", async () => {
           const response = await request(`/api/admin/campaigns/${campaign.id}/activate`, { method: "POST" });
@@ -101,7 +135,7 @@
         }, "primary"));
       }
 
-      card.append(heading, meta, members, actions);
+      card.append(heading, summary, actions);
       list.append(card);
     }
   }
@@ -122,7 +156,23 @@
       packSelect.append(option);
     }
     memberOptions(createMembers);
+    openCreateButton.disabled = false;
     await loadCampaigns();
+  }
+
+  openCreateButton.addEventListener("click", () => {
+    error.hidden = true;
+    memberOptions(createMembers);
+    showDialog(createDialog);
+  });
+
+  for (const dialog of [createDialog, membersDialog]) {
+    dialog.addEventListener("click", (event) => {
+      if (event.target === dialog) closeDialog(dialog);
+    });
+    for (const button of dialog.querySelectorAll("[data-close-dialog]")) {
+      button.addEventListener("click", () => closeDialog(dialog));
+    }
   }
 
   form.addEventListener("submit", async (event) => {
@@ -149,6 +199,26 @@
     form.elements.max_characters_per_player.value = "3";
     form.elements.activate.checked = true;
     memberOptions(createMembers);
+    closeDialog(createDialog);
+    await loadCampaigns();
+  });
+
+  membersForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    membersError.hidden = true;
+    if (!currentCampaignId) return;
+    const response = await request(`/api/admin/campaigns/${currentCampaignId}/members`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ member_ids: selectedMembers(editMembers) }),
+    });
+    if (!response.ok) {
+      membersError.textContent = "Não foi possível salvar os membros.";
+      membersError.hidden = false;
+      return;
+    }
+    currentCampaignId = null;
+    closeDialog(membersDialog);
     await loadCampaigns();
   });
 
