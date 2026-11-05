@@ -12,6 +12,7 @@ dependencies = [
     "aiosqlite>=0.22.1",
     "fastapi>=0.141.1",
     "numpy>=2.5.2",
+    "pwdlib[argon2]>=0.3.0",
     "pydantic>=2.13.5",
     "pydantic-settings>=2.15.0",
     "python-multipart>=0.0.32",
@@ -25,6 +26,7 @@ dependencies = [
 
 [project.scripts]
 loremaster = "loremaster:main"
+loremaster-bootstrap-gm = "loremaster.bootstrap:main"
 
 [build-system]
 requires = ["uv_build>=0.12.7,<0.13.0"]

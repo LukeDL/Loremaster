@@ -8,11 +8,15 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
-from loremaster.api.deps import get_scene_service
+from loremaster.api.deps import get_scene_service, require_csrf, require_gm
 from loremaster.models.scene import AudioGroup
 from loremaster.scene_service import SceneService
 
-router = APIRouter(prefix="/api/playback", tags=["playback"])
+router = APIRouter(
+    prefix="/api/playback",
+    tags=["playback"],
+    dependencies=[Depends(require_gm), Depends(require_csrf)],
+)
 
 
 class PlayRequest(BaseModel):

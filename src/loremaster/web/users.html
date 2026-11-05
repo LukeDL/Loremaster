@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0d1117" />
+    <title>Loremaster — jogadores</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Jogadores</h1>
+      <div class="header-actions">
+        <a href="/">Engine de Som</a>
+        <button type="button" onclick="LoremasterAuth.logout()">sair</button>
+      </div>
+    </header>
+    <main>
+      <form id="create-player" class="auth-card user-create-card">
+        <div class="section-title">nova conta de jogador</div>
+        <label>Usuário <input name="username" required minlength="3" maxlength="50" /></label>
+        <label>Senha temporária <input name="password" type="password" required minlength="10" maxlength="256" /></label>
+        <p id="create-error" class="auth-error" role="alert" hidden></p>
+        <button class="primary" type="submit">criar jogador</button>
+      </form>
+
+      <section class="users-panel">
+        <div class="section-title">contas</div>
+        <div id="users-list"></div>
+      </section>
+    </main>
+    <script src="/auth-client.js"></script>
+    <script src="/users.js"></script>
+  </body>
+</html>

@@ -684,13 +684,17 @@ const App = {
       if (disconnectWs) disconnectWs();
     });
 
-    return { store, localMaster, currentScene, stopAll, endScene, goto };
+    const logout = () => window.LoremasterAuth.logout();
+
+    return { store, localMaster, currentScene, stopAll, endScene, goto, logout };
   },
   template: `
     <header>
       <h1>Loremaster</h1>
       <div style="display: flex; align-items: center; gap: 12px;">
         <a href="/map" style="color: var(--muted); font-size: 12px; text-decoration: none;">↗ mapa</a>
+        <a href="/users" style="color: var(--muted); font-size: 12px; text-decoration: none;">jogadores</a>
+        <button @click="logout" style="background: transparent;">sair</button>
         <div class="status-line">
           <span class="status-dot" :class="store.connected ? 'online' : 'offline'"></span>
           {{ store.connected ? 'conectado' : 'reconectando…' }}

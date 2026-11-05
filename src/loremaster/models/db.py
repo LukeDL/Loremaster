@@ -10,7 +10,7 @@ from pathlib import Path
 import sqlite3
 from uuid import UUID
 
-from sqlalchemy import ForeignKey, String, Text, event, text
+from sqlalchemy import CheckConstraint, ForeignKey, String, Text, UniqueConstraint, event, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
@@ -27,6 +27,45 @@ log = logging.getLogger(__name__)
 
 class Base(DeclarativeBase):
     pass
+
+
+class UserRow(Base):
+    __tablename__ = "users"
+    __table_args__ = (
+        UniqueConstraint("username_key", name="uq_users_username_key"),
+        CheckConstraint("role IN ('player', 'gm')", name="ck_users_role"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    username: Mapped[str] = mapped_column(String(50))
+    username_key: Mapped[str] = mapped_column(String(50))
+    password_hash: Mapped[str] = mapped_column(Text)
+    role: Mapped[str] = mapped_column(String(16))
+    is_active: Mapped[bool] = mapped_column(default=True, server_default="1")
+    created_at: Mapped[datetime]
+    updated_at: Mapped[datetime]
+    password_changed_at: Mapped[datetime]
+
+    sessions: Mapped[list["SessionRow"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+
+
+class SessionRow(Base):
+    __tablename__ = "sessions"
+
+    token_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        index=True,
+    )
+    csrf_hash: Mapped[str] = mapped_column(String(64))
+    created_at: Mapped[datetime]
+    expires_at: Mapped[datetime] = mapped_column(index=True)
+    last_seen_at: Mapped[datetime]
+
+    user: Mapped[UserRow] = relationship(back_populates="sessions")
 
 
 class AudioFileRow(Base):

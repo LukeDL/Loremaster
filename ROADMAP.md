@@ -149,8 +149,9 @@ antes de algumas sessões reais indicarem quais roteamentos são úteis.
 
 ## R3 — Personagens da party
 
-**Status:** planejado; não ativo enquanto a R2.3 não concluir o aceite no
-notebook.
+**Status:** autenticação do primeiro MVP implementada localmente na branch
+`r3-characters`; aguardando validação no notebook. A linha operacional da R2.3
+permanece separada.
 
 Objetivo: permitir que cada jogador crie, evolua e use seu personagem no
 Loremaster, com progressão completa do nível 1 ao 20 segundo D&D 5e 2024. O
@@ -160,8 +161,23 @@ edições.
 Decisões de produto:
 
 - acesso inicial pela rede local, no navegador de cada jogador;
-- arquitetura preparada para autenticação e acesso remoto posteriores, sem
-  expor a instalação local à internet nesta etapa;
+- autenticação por usuário e senha desde o primeiro MVP, com dois papéis
+  explícitos: `player` e `gm`;
+- cada `player` acessa e altera somente os próprios personagens;
+- o `gm` administra os jogadores, visualiza todos os personagens e tem acesso
+  exclusivo ao mixer, mapa, cenas, uploads, playback e demais funções da engine
+  de som;
+- o mestre cria, desativa e redefine as credenciais dos jogadores; não existe
+  cadastro público no primeiro MVP;
+- senhas nunca são armazenadas em texto puro; sessões autenticadas usam cookies
+  `HttpOnly` e `SameSite`, acrescentando `Secure` sob HTTPS, e as APIs e o
+  WebSocket aplicam autorização no servidor, sem confiar apenas em menus
+  ocultos na interface;
+- a conta inicial do mestre é criada por um fluxo local de bootstrap, sem senha
+  padrão no código ou no repositório;
+- arquitetura preparada para acesso remoto posterior, mas a instalação não será
+  exposta à internet antes de HTTPS, proteção contra tentativas repetidas e
+  recuperação segura de conta;
 - criação guiada, ficha digital jogável e progressão até o nível 20;
 - regras, conteúdo e dados do personagem separados: cada campanha fixa a
   edição e os pacotes de conteúdo permitidos;
@@ -175,23 +191,45 @@ Decisões de produto:
 
 A entrega completa será construída em incrementos verticais utilizáveis:
 
-1. fundação de campanhas, jogadores, convites locais, personagens e pacotes de
-   regras versionados;
-2. criação de nível 1 com atributos, espécie, antecedente, classe, perícias,
+1. autenticação por usuário e senha, papéis `player`/`gm`, bootstrap local do
+   mestre, administração de jogadores e proteção da engine de som;
+2. fundação de campanhas, propriedade dos personagens e pacotes de regras
+   versionados;
+3. criação de nível 1 com atributos, espécie, antecedente, classe, perícias,
    equipamento e cálculos derivados;
-3. ficha jogável com recursos, descanso, pontos de vida, condições, ataques,
+4. ficha jogável com recursos, descanso, pontos de vida, condições, ataques,
    magias e inventário;
-4. progressão validada do nível 2 ao 20, incluindo multiclasse, talentos,
+5. progressão validada do nível 2 ao 20, incluindo multiclasse, talentos,
    subclasses e preparação de magias;
-5. importação privada de conteúdo autorizado, homebrew e ferramentas de
+6. importação privada de conteúdo autorizado, homebrew e ferramentas de
    revisão do mestre;
-6. suporte à edição 2014 por pacotes de regras e migração ou duplicação
+7. suporte à edição 2014 por pacotes de regras e migração ou duplicação
    explícita do personagem, sem conversão silenciosa.
 
-**Aceite do módulo:** quatro jogadores conseguem, a partir de convites locais,
-criar personagens legais de D&D 5e 2024, evoluí-los até o nível 20 por caminhos
-de classe única e multiclasse, usar as fichas durante a sessão e manter os dados
-após reiniciar o Loremaster. A suíte cobre cálculos, pré-requisitos e progressão
+Entregue no incremento de autenticação:
+
+- bootstrap local da primeira conta `gm`, sem senha padrão;
+- login e logout com sessão opaca persistida no SQLite;
+- senhas protegidas por Argon2id e tokens de sessão armazenados apenas como
+  hash;
+- administração de contas `player` pelo mestre, incluindo desativação e
+  redefinição de senha;
+- proteção no servidor das páginas, APIs e WebSocket da Engine de Som;
+- isolamento do jogador em uma área própria, ainda sem o criador de
+  personagens;
+- proteção CSRF nas operações mutáveis e migração com backup dos bancos
+  existentes.
+
+**Aceite do primeiro MVP:** o mestre executa o bootstrap local, entra com usuário
+e senha, cria quatro contas de jogador, visualiza todas as fichas e opera a
+engine de som. Cada jogador entra separadamente, não consegue acessar a engine
+nem ler ou alterar o personagem dos demais e mantém sua sessão e seus dados
+após reiniciar o Loremaster.
+
+**Aceite do módulo completo:** os quatro jogadores criam personagens legais de
+D&D 5e 2024, evoluem-nos até o nível 20 por caminhos de classe única e
+multiclasse e usam as fichas durante a sessão. A suíte cobre autenticação,
+autorização, isolamento entre jogadores, cálculos, pré-requisitos e progressão
 sem depender do banco nem dos dados reais.
 
 ## Manutenção dos assets frontend

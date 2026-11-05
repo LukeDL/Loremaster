@@ -30,6 +30,43 @@ html, body {
   flex-direction: column;
 }
 
+.auth-shell {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.auth-card {
+  width: min(100%, 380px);
+  display: grid;
+  gap: 16px;
+  padding: 24px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel);
+}
+
+.auth-card h1 { margin: 0; }
+.auth-card label { display: grid; gap: 6px; color: var(--muted); }
+.auth-card input { width: 100%; }
+.auth-error { margin: 0; color: var(--danger); }
+
+.user-create-card { margin-bottom: 24px; }
+.users-panel { max-width: 760px; }
+.user-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+.user-row .meta { color: var(--muted); font-size: 12px; margin-top: 3px; }
+.user-row .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.header-actions { display: flex; align-items: center; gap: 12px; }
+.header-actions a { color: var(--muted); text-decoration: none; }
+
 header {
   padding: 12px 16px;
   border-bottom: 1px solid var(--border);
