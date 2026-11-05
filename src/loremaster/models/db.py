@@ -10,7 +10,7 @@ from pathlib import Path
 import sqlite3
 from uuid import UUID
 
-from sqlalchemy import CheckConstraint, ForeignKey, String, Text, UniqueConstraint, event, text
+from sqlalchemy import CheckConstraint, ForeignKey, Index, String, Text, UniqueConstraint, event, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
@@ -66,6 +66,70 @@ class SessionRow(Base):
     last_seen_at: Mapped[datetime]
 
     user: Mapped[UserRow] = relationship(back_populates="sessions")
+
+
+class RulePackRow(Base):
+    __tablename__ = "rule_packs"
+    __table_args__ = (UniqueConstraint("key", "version", name="uq_rule_packs_key_version"),)
+
+    id: Mapped[str] = mapped_column(String(100), primary_key=True)
+    key: Mapped[str] = mapped_column(String(100))
+    name: Mapped[str] = mapped_column(String(200))
+    system: Mapped[str] = mapped_column(String(50))
+    edition: Mapped[str] = mapped_column(String(50))
+    version: Mapped[str] = mapped_column(String(50))
+    license_name: Mapped[str] = mapped_column(String(100))
+    created_at: Mapped[datetime]
+
+    campaigns: Mapped[list["CampaignRow"]] = relationship(back_populates="rule_pack")
+
+
+class CampaignRow(Base):
+    __tablename__ = "campaigns"
+    __table_args__ = (
+        CheckConstraint(
+            "max_characters_per_player BETWEEN 1 AND 100",
+            name="ck_campaigns_character_limit",
+        ),
+        Index(
+            "uq_campaigns_one_active",
+            "is_active",
+            unique=True,
+            sqlite_where=text("is_active = 1"),
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    name: Mapped[str] = mapped_column(String(200))
+    rule_pack_id: Mapped[str] = mapped_column(ForeignKey("rule_packs.id"), index=True)
+    max_characters_per_player: Mapped[int] = mapped_column(default=3, server_default="3")
+    is_active: Mapped[bool] = mapped_column(default=False, server_default="0")
+    created_by_user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    created_at: Mapped[datetime]
+    updated_at: Mapped[datetime]
+
+    rule_pack: Mapped[RulePackRow] = relationship(back_populates="campaigns")
+    memberships: Mapped[list["CampaignMemberRow"]] = relationship(
+        back_populates="campaign",
+        cascade="all, delete-orphan",
+    )
+
+
+class CampaignMemberRow(Base):
+    __tablename__ = "campaign_members"
+
+    campaign_id: Mapped[str] = mapped_column(
+        ForeignKey("campaigns.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    added_at: Mapped[datetime]
+
+    campaign: Mapped[CampaignRow] = relationship(back_populates="memberships")
+    user: Mapped[UserRow] = relationship()
 
 
 class AudioFileRow(Base):

@@ -95,7 +95,7 @@ async def test_fresh_database_records_all_migrations_and_enables_foreign_keys(tm
 
     assert applied == MIGRATION_VERSIONS
     assert foreign_keys == 1
-    assert {"users", "sessions"} <= tables
+    assert {"users", "sessions", "rule_packs", "campaigns", "campaign_members"} <= tables
 
 
 @pytest.mark.asyncio
@@ -121,13 +121,16 @@ async def test_legacy_database_is_backed_up_and_migrated_without_data_loss(tmp_p
             "SELECT id, name, is_entry, group_volumes_json FROM scenes"
         ).fetchone()
         applied = {row[0] for row in connection.execute("SELECT version FROM schema_migrations")}
-        auth_tables = {
+        new_tables = {
             row[0]
             for row in connection.execute(
                 "SELECT name FROM sqlite_master WHERE type='table' "
-                "AND name IN ('users', 'sessions')"
+                "AND name IN ('users', 'sessions', 'rule_packs', 'campaigns', 'campaign_members')"
             )
         }
+        rule_pack = connection.execute(
+            "SELECT id, edition, version, license_name FROM rule_packs"
+        ).fetchone()
 
     assert {"pan_lr", "loop_start_ms", "loop_end_ms", "group_name"} <= layer_columns
     assert {"is_entry", "group_volumes_json"} <= scene_columns
@@ -139,7 +142,8 @@ async def test_legacy_database_is_backed_up_and_migrated_without_data_loss(tmp_p
         '{"music":1.0,"ambience":1.0,"sfx":1.0}',
     )
     assert applied == MIGRATION_VERSIONS
-    assert auth_tables == {"users", "sessions"}
+    assert new_tables == {"users", "sessions", "rule_packs", "campaigns", "campaign_members"}
+    assert rule_pack == ("dnd5e-2024-core-v1", "2024", "1.0.0", "metadata-only")
     backups = list((tmp_path / "backups").glob("legacy-pre-migration-*.db"))
     assert len(backups) == 1
     with sqlite3.connect(backups[0]) as backup:

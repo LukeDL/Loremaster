@@ -693,6 +693,7 @@ const App = {
       <h1>Loremaster</h1>
       <div style="display: flex; align-items: center; gap: 12px;">
         <a href="/map" style="color: var(--muted); font-size: 12px; text-decoration: none;">↗ mapa</a>
+        <a href="/campaigns" style="color: var(--muted); font-size: 12px; text-decoration: none;">campanhas</a>
         <a href="/users" style="color: var(--muted); font-size: 12px; text-decoration: none;">jogadores</a>
         <button @click="logout" style="background: transparent;">sair</button>
         <div class="status-line">

@@ -150,7 +150,8 @@ antes de algumas sessões reais indicarem quais roteamentos são úteis.
 ## R3 — Personagens da party
 
 **Status:** autenticação do primeiro MVP implementada e validada pelo mestre no
-notebook real. A linha operacional da R2.3 permanece separada.
+notebook real. A interface de criação de campanhas foi implementada e aguarda
+validação no notebook. A linha operacional da R2.3 permanece separada.
 
 Objetivo: permitir que cada jogador crie, evolua e use seu personagem no
 Loremaster, com progressão completa do nível 1 ao 20 segundo D&D 5e 2024. O
@@ -271,6 +272,22 @@ aplicação.
 Ficam fora deste incremento: atributos, espécie, antecedente, classe, perícias,
 equipamento, cálculos derivados, progressão de nível, conteúdo dos livros e
 alterações mecânicas feitas pelo mestre.
+
+Implementado na primeira entrega deste incremento:
+
+- criação de campanhas pelo mestre com nome, pacote de regras e limite `N` de
+  personagens por jogador;
+- associação de contas ativas de jogadores durante ou após a criação;
+- seleção de uma única campanha ativa por vez;
+- pacote D&D 5e 2024 com metadados versionados, sem conteúdo proprietário;
+- persistência no SQLite, migração com backup, autorização exclusiva do mestre
+  e proteção CSRF;
+- interface local acessível em `/campaigns`, ligada às telas da Engine de Som e
+  de administração de jogadores.
+
+A entrega passou pela suíte automatizada e pelo fluxo completo em navegador de
+criar jogadores e criar “Return of the Setting Sun”. Falta a validação no
+notebook real do mestre.
 
 **Aceite do primeiro MVP:** o mestre executa o bootstrap local, entra com usuário
 e senha, cria quatro contas de jogador, visualiza todas as fichas e opera a
