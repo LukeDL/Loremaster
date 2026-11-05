@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0d1117" />
+    <title>Loremaster — entrar</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <main class="auth-shell">
+      <form id="login-form" class="auth-card">
+        <div class="section-title">acesso à campanha</div>
+        <h1>Loremaster</h1>
+        <label>
+          Usuário
+          <input name="username" autocomplete="username" required maxlength="50" />
+        </label>
+        <label>
+          Senha
+          <input name="password" type="password" autocomplete="current-password" required maxlength="256" />
+        </label>
+        <p id="login-error" class="auth-error" role="alert" hidden></p>
+        <button class="primary" type="submit">entrar</button>
+      </form>
+    </main>
+    <script src="/auth-client.js"></script>
+    <script src="/login.js"></script>
+  </body>
+</html>

@@ -74,12 +74,44 @@ async def _add_mixer_groups(conn: AsyncConnection) -> None:
     await _add_column(conn, "layers", "group_name", "VARCHAR(16) NOT NULL DEFAULT 'ambience'")
 
 
+async def _create_auth_tables(conn: AsyncConnection) -> None:
+    await conn.execute(
+        text(
+            "CREATE TABLE IF NOT EXISTS users ("
+            "id VARCHAR(36) PRIMARY KEY, "
+            "username VARCHAR(50) NOT NULL, "
+            "username_key VARCHAR(50) NOT NULL, "
+            "password_hash TEXT NOT NULL, "
+            "role VARCHAR(16) NOT NULL CHECK (role IN ('player', 'gm')), "
+            "is_active BOOLEAN NOT NULL DEFAULT 1, "
+            "created_at DATETIME NOT NULL, "
+            "updated_at DATETIME NOT NULL, "
+            "password_changed_at DATETIME NOT NULL, "
+            "CONSTRAINT uq_users_username_key UNIQUE (username_key))"
+        )
+    )
+    await conn.execute(
+        text(
+            "CREATE TABLE IF NOT EXISTS sessions ("
+            "token_hash VARCHAR(64) PRIMARY KEY, "
+            "user_id VARCHAR(36) NOT NULL REFERENCES users(id) ON DELETE CASCADE, "
+            "csrf_hash VARCHAR(64) NOT NULL, "
+            "created_at DATETIME NOT NULL, "
+            "expires_at DATETIME NOT NULL, "
+            "last_seen_at DATETIME NOT NULL)"
+        )
+    )
+    await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_sessions_user_id ON sessions(user_id)"))
+    await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_sessions_expires_at ON sessions(expires_at)"))
+
+
 MIGRATIONS = (
     Migration("001_add_loop_region_columns", _add_loop_region_columns),
     Migration("002_add_scene_entry", _add_scene_entry),
     Migration("003_add_layer_pan", _add_layer_pan),
     Migration("004_add_lookup_indexes", _add_lookup_indexes),
     Migration("005_add_mixer_groups", _add_mixer_groups),
+    Migration("006_create_auth_tables", _create_auth_tables),
 )
 MIGRATION_VERSIONS = frozenset(migration.version for migration in MIGRATIONS)
 

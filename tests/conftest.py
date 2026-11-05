@@ -13,6 +13,8 @@ from loremaster.audio.scene_player import ScenePlayer
 from loremaster.config import settings
 from loremaster.events import EventBus
 from loremaster.main import create_app
+from loremaster.models.auth import Role
+from loremaster.models.auth_repository import create_user
 from loremaster.models.db import Database
 from loremaster.scene_service import SceneService
 
@@ -80,6 +82,13 @@ async def app(tmp_path, monkeypatch):
     async def fake_lifespan(app):
         db = Database(f"sqlite+aiosqlite:///{tmp_path / 'test.db'}")
         await db.create_all()
+        async with db.session() as sess:
+            await create_user(
+                sess,
+                username="test-gm",
+                password="test-password-123",
+                role=Role.GM,
+            )
         bus = EventBus()
         engine = FakeEngine()
         loader = FakeLoader()
@@ -108,6 +117,19 @@ async def app(tmp_path, monkeypatch):
 
 
 @pytest.fixture
-def client(app):
+def raw_client(app):
     with TestClient(app) as client:
         yield client
+
+
+@pytest.fixture
+def client(raw_client):
+    response = raw_client.post(
+        "/api/auth/login",
+        json={"username": "test-gm", "password": "test-password-123"},
+    )
+    assert response.status_code == 200, response.text
+    csrf = raw_client.cookies.get("loremaster_csrf")
+    assert csrf
+    raw_client.headers["X-CSRF-Token"] = csrf
+    yield raw_client

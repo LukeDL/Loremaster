@@ -62,6 +62,14 @@ def test_map_static_ui_serves_only_local_assets(client):
     _assert_local_page(client, "/map")
 
 
+def test_users_static_ui_serves_only_local_assets(client):
+    _assert_local_page(client, "/users")
+
+
+def test_login_static_ui_serves_only_local_assets(raw_client):
+    _assert_local_page(raw_client, "/login")
+
+
 def test_headless_lifespan_does_not_start_hardware(client):
     assert client.app.state.engine.__class__.__name__ == "FakeEngine"
     assert not hasattr(client.app.state, "mdns")

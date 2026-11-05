@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from pydantic import BaseModel
 
-from loremaster.api.deps import db_session
+from loremaster.api.deps import db_session, require_csrf, require_gm
 from loremaster.models.repository import (
     InvalidReferenceError,
     create_scene,
@@ -23,10 +23,11 @@ from loremaster.models.repository import (
 )
 from loremaster.models.scene import OnEndPolicy, Scene, SceneCreate, SceneUpdate
 
-router = APIRouter(prefix="/api/scenes", tags=["scenes"])
+_GM_DEPENDENCIES = [Depends(require_gm), Depends(require_csrf)]
+router = APIRouter(prefix="/api/scenes", tags=["scenes"], dependencies=_GM_DEPENDENCIES)
 # Separate router for the singleton entry-scene resource: it doesn't hang off
 # a specific /scenes/{id}, so it gets its own prefix.
-singletons_router = APIRouter(prefix="/api", tags=["scenes"])
+singletons_router = APIRouter(prefix="/api", tags=["scenes"], dependencies=_GM_DEPENDENCIES)
 
 
 class PositionPayload(BaseModel):

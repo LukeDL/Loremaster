@@ -7,10 +7,14 @@ import json
 import logging
 from contextlib import suppress
 from typing import Any
+from urllib.parse import urlsplit
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from loremaster.events import Event, EventBus, PlaybackStateSnapshot
+from loremaster.config import settings
+from loremaster.models.auth import Role
+from loremaster.models.auth_repository import get_session_user
 from loremaster.scene_service import SceneService
 
 log = logging.getLogger(__name__)
@@ -90,6 +94,25 @@ class WsBroadcaster:
 
 @router.websocket("/ws")
 async def websocket_endpoint(ws: WebSocket) -> None:
+    origin = ws.headers.get("origin")
+    if origin:
+        parsed = urlsplit(origin)
+        if parsed.netloc != ws.url.netloc or parsed.scheme not in {"http", "https"}:
+            await ws.close(code=4403)
+            return
+    token = ws.cookies.get(settings.session_cookie_name)
+    if not token:
+        await ws.close(code=4401)
+        return
+    async with ws.app.state.db.session() as sess:
+        found = await get_session_user(sess, token)
+    if found is None:
+        await ws.close(code=4401)
+        return
+    _, user = found
+    if user.role != Role.GM.value:
+        await ws.close(code=4403)
+        return
     broadcaster: WsBroadcaster = ws.app.state.ws_broadcaster
     await broadcaster.connect(ws)
     try:

@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, status
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from loremaster.api.deps import db_session
+from loremaster.api.deps import db_session, require_csrf, require_gm
 from loremaster.config import settings
 from loremaster.models.repository import (
     create_audio_file,
@@ -21,7 +21,11 @@ from loremaster.models.repository import (
 )
 from loremaster.models.scene import AudioFile
 
-router = APIRouter(prefix="/api/uploads", tags=["uploads"])
+router = APIRouter(
+    prefix="/api/uploads",
+    tags=["uploads"],
+    dependencies=[Depends(require_gm), Depends(require_csrf)],
+)
 
 ALLOWED_EXTS = {".wav", ".flac", ".ogg", ".mp3", ".oga", ".opus", ".aiff", ".aif"}
 

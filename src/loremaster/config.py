@@ -52,6 +52,10 @@ class Settings(BaseSettings):
     sample_rate: int = 48_000
     block_size: int = 1024
     audio_device: int | str | None = None
+    session_cookie_name: str = "loremaster_session"
+    csrf_cookie_name: str = "loremaster_csrf"
+    session_lifetime_hours: int = 24 * 30
+    cookie_secure: bool = False
 
     @property
     def audio_dir(self) -> Path:

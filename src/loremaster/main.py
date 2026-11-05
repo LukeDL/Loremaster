@@ -6,11 +6,12 @@ import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, Request
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-from loremaster.api import playback, scenes, uploads
+from loremaster.api import auth, playback, scenes, uploads, users
+from loremaster.api.deps import get_auth_context
 from loremaster.api.ws import WsBroadcaster, router as ws_router
 from loremaster.audio.engine import AudioEngine
 from loremaster.audio.loader import AudioLoader
@@ -85,6 +86,8 @@ def create_app(lifespan_context=lifespan) -> FastAPI:
     """Build the app with an explicit seam for hardware-free tests."""
     app = FastAPI(title="Loremaster", version="0.1.0", lifespan=lifespan_context)
 
+    app.include_router(auth.router)
+    app.include_router(users.router)
     app.include_router(uploads.router)
     app.include_router(scenes.router)
     app.include_router(scenes.singletons_router)
@@ -93,11 +96,45 @@ def create_app(lifespan_context=lifespan) -> FastAPI:
 
     web_dir = Path(__file__).parent / "web"
     if web_dir.exists():
-        # Clean URL for the campaign map — Vue Flow app is heavy enough to
-        # justify its own document, distinct from the tablet control SPA.
+        async def authenticated_page(request: Request, filename: str):
+            context = await get_auth_context(request)
+            if context is None:
+                return RedirectResponse("/login", status_code=303)
+            if context.user.role != "gm":
+                return RedirectResponse("/player", status_code=303)
+            return FileResponse(web_dir / filename)
+
+        @app.get("/login", include_in_schema=False)
+        async def login_page(request: Request):
+            context = await get_auth_context(request)
+            if context is not None:
+                destination = "/" if context.user.role == "gm" else "/player"
+                return RedirectResponse(destination, status_code=303)
+            return FileResponse(web_dir / "login.html")
+
+        @app.get("/player", include_in_schema=False)
+        async def player_page(request: Request):
+            context = await get_auth_context(request)
+            if context is None:
+                return RedirectResponse("/login", status_code=303)
+            if context.user.role == "gm":
+                return RedirectResponse("/", status_code=303)
+            return FileResponse(web_dir / "player.html")
+
+        @app.get("/", include_in_schema=False)
+        @app.get("/index.html", include_in_schema=False)
+        async def index_page(request: Request):
+            return await authenticated_page(request, "index.html")
+
         @app.get("/map", include_in_schema=False)
-        def map_page():
-            return FileResponse(web_dir / "map.html")
+        @app.get("/map.html", include_in_schema=False)
+        async def map_page(request: Request):
+            return await authenticated_page(request, "map.html")
+
+        @app.get("/users", include_in_schema=False)
+        @app.get("/users.html", include_in_schema=False)
+        async def users_page(request: Request):
+            return await authenticated_page(request, "users.html")
 
         app.mount("/", StaticFiles(directory=str(web_dir), html=True), name="web")
 

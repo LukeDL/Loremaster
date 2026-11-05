@@ -84,11 +84,18 @@ async def test_fresh_database_records_all_migrations_and_enables_foreign_keys(tm
                 row[0] for row in (await conn.execute(text("SELECT version FROM schema_migrations")))
             }
             foreign_keys = (await conn.execute(text("PRAGMA foreign_keys"))).scalar_one()
+            tables = {
+                row[0]
+                for row in (
+                    await conn.execute(text("SELECT name FROM sqlite_master WHERE type='table'"))
+                )
+            }
     finally:
         await db.close()
 
     assert applied == MIGRATION_VERSIONS
     assert foreign_keys == 1
+    assert {"users", "sessions"} <= tables
 
 
 @pytest.mark.asyncio
@@ -114,6 +121,13 @@ async def test_legacy_database_is_backed_up_and_migrated_without_data_loss(tmp_p
             "SELECT id, name, is_entry, group_volumes_json FROM scenes"
         ).fetchone()
         applied = {row[0] for row in connection.execute("SELECT version FROM schema_migrations")}
+        auth_tables = {
+            row[0]
+            for row in connection.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' "
+                "AND name IN ('users', 'sessions')"
+            )
+        }
 
     assert {"pan_lr", "loop_start_ms", "loop_end_ms", "group_name"} <= layer_columns
     assert {"is_entry", "group_volumes_json"} <= scene_columns
@@ -125,6 +139,7 @@ async def test_legacy_database_is_backed_up_and_migrated_without_data_loss(tmp_p
         '{"music":1.0,"ambience":1.0,"sfx":1.0}',
     )
     assert applied == MIGRATION_VERSIONS
+    assert auth_tables == {"users", "sessions"}
     backups = list((tmp_path / "backups").glob("legacy-pre-migration-*.db"))
     assert len(backups) == 1
     with sqlite3.connect(backups[0]) as backup:
