@@ -105,6 +105,69 @@ async def _create_auth_tables(conn: AsyncConnection) -> None:
     await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_sessions_expires_at ON sessions(expires_at)"))
 
 
+async def _create_campaign_tables(conn: AsyncConnection) -> None:
+    await conn.execute(
+        text(
+            "CREATE TABLE IF NOT EXISTS rule_packs ("
+            "id VARCHAR(100) PRIMARY KEY, "
+            "key VARCHAR(100) NOT NULL, "
+            "name VARCHAR(200) NOT NULL, "
+            "system VARCHAR(50) NOT NULL, "
+            "edition VARCHAR(50) NOT NULL, "
+            "version VARCHAR(50) NOT NULL, "
+            "license_name VARCHAR(100) NOT NULL, "
+            "created_at DATETIME NOT NULL, "
+            "CONSTRAINT uq_rule_packs_key_version UNIQUE (key, version))"
+        )
+    )
+    await conn.execute(
+        text(
+            "CREATE TABLE IF NOT EXISTS campaigns ("
+            "id VARCHAR(36) PRIMARY KEY, "
+            "name VARCHAR(200) NOT NULL, "
+            "rule_pack_id VARCHAR(100) NOT NULL REFERENCES rule_packs(id), "
+            "max_characters_per_player INTEGER NOT NULL DEFAULT 3 "
+            "CHECK (max_characters_per_player BETWEEN 1 AND 100), "
+            "is_active BOOLEAN NOT NULL DEFAULT 0, "
+            "created_by_user_id VARCHAR(36) NOT NULL REFERENCES users(id), "
+            "created_at DATETIME NOT NULL, "
+            "updated_at DATETIME NOT NULL)"
+        )
+    )
+    await conn.execute(
+        text(
+            "CREATE TABLE IF NOT EXISTS campaign_members ("
+            "campaign_id VARCHAR(36) NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE, "
+            "user_id VARCHAR(36) NOT NULL REFERENCES users(id) ON DELETE CASCADE, "
+            "added_at DATETIME NOT NULL, "
+            "PRIMARY KEY (campaign_id, user_id))"
+        )
+    )
+    await conn.execute(
+        text(
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_campaigns_one_active "
+            "ON campaigns(is_active) WHERE is_active = 1"
+        )
+    )
+    await conn.execute(
+        text("CREATE INDEX IF NOT EXISTS ix_campaigns_rule_pack_id ON campaigns(rule_pack_id)")
+    )
+    await conn.execute(
+        text(
+            "CREATE INDEX IF NOT EXISTS ix_campaigns_created_by_user_id "
+            "ON campaigns(created_by_user_id)"
+        )
+    )
+    await conn.execute(
+        text(
+            "INSERT OR IGNORE INTO rule_packs "
+            "(id, key, name, system, edition, version, license_name, created_at) VALUES "
+            "('dnd5e-2024-core-v1', 'dnd5e-2024-core', 'D&D 5e 2024 — Core', "
+            "'dnd5e', '2024', '1.0.0', 'metadata-only', CURRENT_TIMESTAMP)"
+        )
+    )
+
+
 MIGRATIONS = (
     Migration("001_add_loop_region_columns", _add_loop_region_columns),
     Migration("002_add_scene_entry", _add_scene_entry),
@@ -112,6 +175,7 @@ MIGRATIONS = (
     Migration("004_add_lookup_indexes", _add_lookup_indexes),
     Migration("005_add_mixer_groups", _add_mixer_groups),
     Migration("006_create_auth_tables", _create_auth_tables),
+    Migration("007_create_campaign_tables", _create_campaign_tables),
 )
 MIGRATION_VERSIONS = frozenset(migration.version for migration in MIGRATIONS)
 

@@ -34,7 +34,15 @@ def test_anonymous_engine_surfaces_are_protected(raw_client):
     alias = raw_client.get("/index.html", follow_redirects=False)
     assert alias.status_code == 303
     assert alias.headers["location"] == "/login"
-    for path in ("/map", "/map.html", "/users", "/users.html", "/player"):
+    for path in (
+        "/map",
+        "/map.html",
+        "/users",
+        "/users.html",
+        "/campaigns",
+        "/campaigns.html",
+        "/player",
+    ):
         protected = raw_client.get(path, follow_redirects=False)
         assert protected.status_code == 303
         assert protected.headers["location"] == "/login"

@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0d1117" />
+    <title>Loremaster — campanhas</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Campanhas</h1>
+      <div class="header-actions">
+        <a href="/">Engine de Som</a>
+        <a href="/users">Jogadores</a>
+        <button type="button" onclick="LoremasterAuth.logout()">sair</button>
+      </div>
+    </header>
+    <main class="admin-main">
+      <form id="create-campaign" class="auth-card campaign-create-card">
+        <div class="section-title">nova campanha</div>
+        <label>Nome <input name="name" required maxlength="200" /></label>
+        <label>
+          Pacote de regras
+          <select name="rule_pack_id" required></select>
+        </label>
+        <label>
+          Máximo de personagens por jogador (N)
+          <input name="max_characters_per_player" type="number" min="1" max="100" value="3" required />
+        </label>
+        <fieldset>
+          <legend>Jogadores</legend>
+          <div id="create-members" class="member-options"></div>
+        </fieldset>
+        <label class="checkbox"><input name="activate" type="checkbox" checked /> tornar ativa</label>
+        <p id="create-campaign-error" class="auth-error" role="alert" hidden></p>
+        <button class="primary" type="submit">criar campanha</button>
+      </form>
+
+      <section class="campaigns-panel">
+        <div class="section-title">campanhas</div>
+        <div id="campaigns-list"></div>
+      </section>
+    </main>
+    <script src="/auth-client.js"></script>
+    <script src="/campaigns.js"></script>
+  </body>
+</html>

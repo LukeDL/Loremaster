@@ -66,6 +66,10 @@ def test_users_static_ui_serves_only_local_assets(client):
     _assert_local_page(client, "/users")
 
 
+def test_campaigns_static_ui_serves_only_local_assets(client):
+    _assert_local_page(client, "/campaigns")
+
+
 def test_login_static_ui_serves_only_local_assets(raw_client):
     _assert_local_page(raw_client, "/login")
 
