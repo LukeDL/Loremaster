@@ -151,8 +151,8 @@ antes de algumas sessões reais indicarem quais roteamentos são úteis.
 
 **Status:** autenticação do primeiro MVP implementada e validada pelo mestre no
 notebook real. Criação de campanhas e associação de membros também foram
-validadas no notebook; a revisão visual com modais aguarda validação. A linha
-operacional da R2.3 permanece separada.
+validadas no notebook; as revisões visuais de campanhas e jogadores com modais
+aguardam validação. A linha operacional da R2.3 permanece separada.
 
 Objetivo: permitir que cada jogador crie, evolua e use seu personagem no
 Loremaster, com progressão completa do nível 1 ao 20 segundo D&D 5e 2024. O
@@ -292,6 +292,10 @@ notebook a criação de campanhas e a associação de membros. Como correção d
 formulários e seletores deixam de ocupar permanentemente a página: criação e
 gestão de membros usam modais, enquanto a visão principal permanece resumida em
 cartões. Fluxos mais extensos devem usar páginas próprias.
+
+A mesma organização se aplica à administração de jogadores: a página mostra
+cartões resumidos; criação de conta, redefinição de senha e confirmação de
+desativação usam modais, sem formulários permanentes nem prompts do navegador.
 
 **Aceite do primeiro MVP:** o mestre executa o bootstrap local, entra com usuário
 e senha, cria quatro contas de jogador, visualiza todas as fichas e opera a

@@ -16,20 +16,84 @@
         <button type="button" onclick="LoremasterAuth.logout()">sair</button>
       </div>
     </header>
-    <main>
-      <form id="create-player" class="auth-card user-create-card">
-        <div class="section-title">nova conta de jogador</div>
-        <label>Usuário <input name="username" required minlength="3" maxlength="50" /></label>
-        <label>Senha temporária <input name="password" type="password" required minlength="10" maxlength="256" /></label>
-        <p id="create-error" class="auth-error" role="alert" hidden></p>
-        <button class="primary" type="submit">criar jogador</button>
-      </form>
+    <main class="admin-main users-main">
+      <section class="users-toolbar" aria-labelledby="users-heading">
+        <div>
+          <div class="section-title">administração</div>
+          <h2 id="users-heading">Contas de jogadores</h2>
+          <p>Crie acessos, redefina senhas e controle quem pode entrar no Loremaster.</p>
+        </div>
+        <button id="open-create-player" class="primary" type="button" disabled>+ novo jogador</button>
+      </section>
 
-      <section class="users-panel">
-        <div class="section-title">contas</div>
-        <div id="users-list"></div>
+      <p id="users-notice" class="page-notice" role="status" hidden></p>
+      <section class="users-panel" aria-live="polite">
+        <div id="users-list" class="user-grid"></div>
       </section>
     </main>
+
+    <dialog id="create-player-dialog" class="app-dialog">
+      <form id="create-player" class="modal-card">
+        <div class="modal-heading">
+          <div>
+            <div class="section-title">nova conta</div>
+            <h2>Criar jogador</h2>
+          </div>
+          <button class="icon-button" type="button" data-close-dialog aria-label="Fechar">×</button>
+        </div>
+        <div class="modal-body form-stack">
+          <label>Usuário <input name="username" required minlength="3" maxlength="50" autofocus /></label>
+          <label>Senha temporária <input name="password" type="password" required minlength="10" maxlength="256" /></label>
+          <p class="modal-description">O jogador poderá entrar imediatamente com essas credenciais.</p>
+          <p id="create-error" class="auth-error" role="alert" hidden></p>
+        </div>
+        <div class="modal-actions">
+          <button type="button" data-close-dialog>cancelar</button>
+          <button class="primary" type="submit">criar jogador</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="password-dialog" class="app-dialog">
+      <form id="password-form" class="modal-card">
+        <div class="modal-heading">
+          <div>
+            <div class="section-title">credenciais</div>
+            <h2 id="password-dialog-title">Redefinir senha</h2>
+          </div>
+          <button class="icon-button" type="button" data-close-dialog aria-label="Fechar">×</button>
+        </div>
+        <div class="modal-body form-stack">
+          <label>Nova senha temporária <input name="password" type="password" required minlength="10" maxlength="256" /></label>
+          <p class="modal-description">As sessões anteriores desse jogador serão encerradas.</p>
+          <p id="password-error" class="auth-error" role="alert" hidden></p>
+        </div>
+        <div class="modal-actions">
+          <button type="button" data-close-dialog>cancelar</button>
+          <button class="primary" type="submit">redefinir senha</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="status-dialog" class="app-dialog app-dialog-small">
+      <form id="status-form" class="modal-card">
+        <div class="modal-heading">
+          <div>
+            <div class="section-title">confirmar alteração</div>
+            <h2 id="status-dialog-title">Desativar jogador</h2>
+          </div>
+          <button class="icon-button" type="button" data-close-dialog aria-label="Fechar">×</button>
+        </div>
+        <div class="modal-body">
+          <p id="status-dialog-description" class="modal-description"></p>
+          <p id="status-error" class="auth-error" role="alert" hidden></p>
+        </div>
+        <div class="modal-actions">
+          <button type="button" data-close-dialog>cancelar</button>
+          <button class="danger" type="submit">desativar jogador</button>
+        </div>
+      </form>
+    </dialog>
     <script src="/auth-client.js"></script>
     <script src="/users.js"></script>
   </body>
