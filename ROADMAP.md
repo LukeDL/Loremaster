@@ -223,6 +223,55 @@ Validação real concluída no notebook após `git pull`, sincronização das
 dependências, bootstrap da conta `gm` e execução do fluxo autenticado. O
 resultado foi confirmado pelo mestre como funcional.
 
+### Próximo incremento — campanha e propriedade dos personagens
+
+**Objetivo:** entregar a fundação multiusuário que permitirá construir o
+criador de nível 1 sem misturar identidade, campanha, regras e ficha.
+
+Decisões:
+
+- o modelo suporta várias campanhas, mas a interface opera sobre uma única
+  campanha ativa por vez;
+- o mestre cria a campanha, escolhe o pacote de regras e associa jogadores pela
+  interface;
+- cada jogador pode manter vários personagens na mesma campanha, com no máximo
+  um personagem ativo;
+- personagens não são apagados durante o uso normal: podem ficar em rascunho,
+  ativos ou retirados;
+- o jogador cria e altera somente os próprios personagens;
+- o mestre visualiza todos os personagens, mas a edição mecânica pelo mestre só
+  será adicionada depois, junto com um histórico auditável de alterações;
+- a campanha fixa o pacote e a versão das regras. Atualizações não alteram
+  silenciosamente personagens existentes;
+- o primeiro pacote será identificado como D&D 5e 2024, mas conterá neste
+  incremento apenas metadados e identidade de versão, sem reproduzir conteúdo
+  proprietário dos livros.
+
+Entrega vertical:
+
+1. persistir campanhas, membros, pacotes de regras versionados e personagens;
+2. permitir ao mestre criar uma campanha, definir a ativa e associar ou remover
+   jogadores;
+3. permitir ao jogador criar, renomear, ativar e retirar seus personagens na
+   campanha da qual participa;
+4. mostrar ao mestre a lista consolidada dos membros e personagens da campanha
+   ativa;
+5. aplicar propriedade e associação à campanha em todas as APIs, impedindo
+   leitura ou alteração cruzada entre jogadores;
+6. preservar os dados e a seleção ativa após reiniciar o Loremaster e migrar um
+   banco existente com backup automático.
+
+**Aceite:** o mestre cria “Return of the Setting Sun”, associa quatro contas de
+jogador e fixa o pacote D&D 5e 2024. Cada jogador cria dois personagens e marca
+somente um como ativo, sem conseguir ler ou alterar fichas alheias. O mestre vê
+todos os membros e personagens, mas não edita seus dados mecânicos. Campanha,
+associações, personagens ativos e versão das regras permanecem após reiniciar a
+aplicação.
+
+Ficam fora deste incremento: atributos, espécie, antecedente, classe, perícias,
+equipamento, cálculos derivados, progressão de nível, conteúdo dos livros e
+alterações mecânicas feitas pelo mestre.
+
 **Aceite do primeiro MVP:** o mestre executa o bootstrap local, entra com usuário
 e senha, cria quatro contas de jogador, visualiza todas as fichas e opera a
 engine de som. Cada jogador entra separadamente, não consegue acessar a engine
