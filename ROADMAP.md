@@ -262,7 +262,7 @@ Entrega vertical:
    banco existente com backup automático.
 
 **Aceite:** o mestre cria “Return of the Setting Sun”, associa quatro contas de
-jogador e fixa o pacote D&D 5e 2024. Cada jogador cria dois personagens e marca
+jogador e fixa o pacote D&D 5e 2024. Cada jogador cria até N personagens e marca
 somente um como ativo, sem conseguir ler ou alterar fichas alheias. O mestre vê
 todos os membros e personagens, mas não edita seus dados mecânicos. Campanha,
 associações, personagens ativos e versão das regras permanecem após reiniciar a
