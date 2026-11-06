@@ -1,5 +1,5 @@
 
-- [Loremaster — Roadmap 2](#loremaster--roadmap-2)
+- [Loremaster — Roadmap integrado](#loremaster--roadmap-integrado)
   - [Forma de trabalho](#forma-de-trabalho)
   - [Roadmap 1 — estado consolidado](#roadmap-1--estado-consolidado)
   - [R2.1 — Base confiável e redução do débito técnico](#r21--base-confiável-e-redução-do-débito-técnico)
@@ -14,11 +14,18 @@
     - [Incremento 2 — criador guiado: atributos](#incremento-2--criador-guiado-atributos)
     - [Incremento 3 — classe, HP e reconstrução de personagem existente](#incremento-3--classe-hp-e-reconstrução-de-personagem-existente)
       - [Seleção de campanha pelo jogador](#seleção-de-campanha-pelo-jogador)
+  - [Release v0.1.0 — sessão de 21/11](#release-v010--sessão-de-2111)
+    - [Incremento 1 — arquitetura integrada da sessão](#incremento-1--arquitetura-integrada-da-sessão)
+    - [Incremento 2 — executor de áudio no navegador](#incremento-2--executor-de-áudio-no-navegador)
+    - [Incremento 3 — gerenciamento de sessão e combate](#incremento-3--gerenciamento-de-sessão-e-combate)
+    - [Incremento 4 — conclusão mínima do personagem](#incremento-4--conclusão-mínima-do-personagem)
+    - [Incremento 5 — publicação e operação](#incremento-5--publicação-e-operação)
+    - [Incremento 6 — aceite da v0.1.0](#incremento-6--aceite-da-v010)
   - [Manutenção dos assets frontend](#manutenção-dos-assets-frontend)
 
 
 
-# Loremaster — Roadmap 2
+# Loremaster — Roadmap integrado
 
 O Loremaster é uma ferramenta local-first para áudio, luz e ambientação em
 sessões de RPG. A aplicação deve continuar utilizável sem internet, com o
@@ -516,6 +523,71 @@ D&D 5e 2024, evoluem-nos até o nível 20 por caminhos de classe única e
 multiclasse e usam as fichas durante a sessão. A suíte cobre autenticação,
 autorização, isolamento entre jogadores, cálculos, pré-requisitos e progressão
 sem depender do banco nem dos dados reais.
+
+## Release v0.1.0 — sessão de 21/11
+
+Esta release reúne a Engine de Som, campanhas, personagens e o futuro controle
+de sessão em uma única aplicação e uma única fonte de dados. A superfície
+externa inicial fica restrita a campanhas e personagens, sem remover as
+capacidades privadas do Mestre. A linha de integração é `main`; cada incremento
+é desenvolvido em uma branch curta e só entra em `main` após verificação e
+aceite.
+
+### Incremento 1 — arquitetura integrada da sessão
+
+- definir o ciclo de vida da sessão e o papel do cliente do Mestre;
+- manter estado autoritativo no servidor para sessão, campanhas e personagens;
+- separar capacidade disponível de superfície publicamente exposta;
+- especificar o menor fluxo de combate necessário para a sessão de 21/11;
+- registrar critérios de aceite antes de iniciar o incremento de combate.
+
+### Incremento 2 — executor de áudio no navegador
+
+- criar uma prova técnica com Web Audio no navegador do Mestre;
+- exigir ativação explícita e indicar claramente o estado do áudio;
+- suportar camadas, volume, pan, intro → loop → tail, fades e crossfades;
+- pré-carregar assets necessários e recuperar contextos suspensos;
+- eleger um único cliente como executor de áudio ativo;
+- manter a engine Python como fallback até a validação em sessão real.
+
+### Incremento 3 — gerenciamento de sessão e combate
+
+- abrir, acompanhar e encerrar uma sessão explicitamente;
+- implementar somente o fluxo de combate aprovado para o primeiro MVP;
+- persistir o estado necessário para reconexão e auditoria;
+- integrar os participantes às versões ativas dos personagens;
+- manter decisões de jogo sob controle do Mestre e dos jogadores responsáveis.
+
+O escopo detalhado deste incremento permanece bloqueado até a definição do
+fluxo mínimo de combate pelo Mestre.
+
+### Incremento 4 — conclusão mínima do personagem
+
+- completar Origem, Atributos, Alinhamento e Detalhes na ordem definida;
+- manter todas as escolhas persistentes, retomáveis e validadas no servidor;
+- registrar procedência e versão do pacote de regras;
+- permitir retrato na etapa final sem acoplar identidades entre campanhas;
+- entregar uma ficha mínima utilizável durante a sessão.
+
+### Incremento 5 — publicação e operação
+
+- empacotar a aplicação para uma VM Ubuntu com Docker Compose;
+- manter SQLite persistente enquanto houver uma única instância de baixa
+  concorrência;
+- publicar por Cloudflare Tunnel sem expor diretamente o IP residencial;
+- aplicar autenticação, autorização, cookies seguros, limites de login e
+  tratamento confiável de proxy;
+- publicar imagens imutáveis no GHCR e uma GitHub Release versionada;
+- fornecer `upgrade.sh` com preflight, backup, migração, health check e rollback.
+
+### Incremento 6 — aceite da v0.1.0
+
+- executar uma sessão simulada completa antes de 21/11;
+- validar áudio no notebook do Mestre e a contingência pela engine Python;
+- validar acesso remoto de jogadores, isolamento e reconexão;
+- percorrer o fluxo de combate definido sem perda de estado;
+- comprovar backup, restauração, upgrade e rollback;
+- publicar a beta privada somente após todos os gates obrigatórios passarem.
 
 ## Manutenção dos assets frontend
 
