@@ -233,11 +233,20 @@ def test_character_creator_is_a_dedicated_player_page_with_local_assets(raw_clie
     assert parser.id_tags["ability-form"] == "form"
     assert parser.id_tags["ability-grid"] == "div"
     assert "ability-form" not in parser.ids_inside_dialog
+    assert response.text.index("<strong>Classe</strong>") < response.text.index("<strong>Origem</strong>")
+    assert response.text.index("<strong>Origem</strong>") < response.text.index("<strong>Atributos</strong>")
+    assert response.text.index("<strong>Atributos</strong>") < response.text.index("<strong>Alinhamento</strong>")
+    assert response.text.index("<strong>Alinhamento</strong>") < response.text.index("<strong>Detalhes</strong>")
 
     script = raw_client.get("/character-creator.js")
     assert script.status_code == 200
     assert "prompt(" not in script.text
     assert "alert(" not in script.text
+    assert 'if (method !== next) scores = Object.fromEntries' not in script.text
+    assert "Método alterado sem apagar os valores" in script.text
+    assert 'controls.className = "score-stepper"' in script.text
+    assert 'decrease.textContent = "−"' in script.text
+    assert 'increase.textContent = "+"' in script.text
 
 
 def test_login_static_ui_serves_only_local_assets(raw_client):

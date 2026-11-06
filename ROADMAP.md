@@ -374,6 +374,13 @@ Decisões:
   mortos ou retirados não podem editar os atributos por esse fluxo;
 - o mestre acompanha `não iniciado`, `em andamento` ou `concluído`, mas não
   preenche escolhas pelo jogador.
+- o fluxo completo seguirá a ordem recomendada nas regras de 2024: classe,
+  origem (antecedente, espécie e idiomas), atributos, alinhamento e detalhes;
+- a etapa final de detalhes incluirá a imagem do personagem, enviada pelo
+  jogador e vinculada somente à versão daquela campanha;
+- trocar entre array padrão e compra por pontos preserva os valores locais. A
+  compra por pontos usa controles diretos de menos/valor/mais; o array padrão
+  mantém seletores para deixar explícitos os valores ainda disponíveis.
 
 Implementado:
 
