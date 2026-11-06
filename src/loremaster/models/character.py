@@ -37,6 +37,10 @@ class CharacterCampaignSummary(BaseModel):
     rule_pack: RulePackPublic
 
 
+class SelectPlayerCampaignRequest(BaseModel):
+    campaign_id: str = Field(min_length=1, max_length=36)
+
+
 class CharacterVersionPublic(BaseModel):
     id: str
     identity: CharacterIdentitySummary
