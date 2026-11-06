@@ -238,8 +238,18 @@ Decisões:
   interface;
 - cada jogador pode manter vários personagens na mesma campanha, com no máximo
   um personagem ativo;
-- personagens não são apagados durante o uso normal: podem ficar em rascunho,
-  ativos ou retirados;
+- personagens não são apagados durante o uso normal: podem ficar em `draft`
+  (rascunho), `active` (ativo), `dead` (morto) ou `retired` (retirado);
+- a identidade conceitual de um personagem é separada de sua versão em uma
+  campanha. Assim, “Arthur” pode pertencer ao mesmo jogador em várias campanhas,
+  mas cada participação possui progressão, estado e dados mecânicos próprios;
+- ao reutilizar um personagem em outra campanha, o jogador pode começar uma nova
+  versão no nível inicial definido pela campanha ou solicitar a continuidade a
+  partir de um retrato da versão anterior. A continuidade depende de autorização
+  do mestre e cria uma cópia independente, sem sincronização posterior entre as
+  campanhas;
+- o limite `N` é contado por versões de personagem dentro de cada campanha, não
+  pela quantidade global de identidades conceituais do jogador;
 - o jogador cria e altera somente os próprios personagens;
 - o mestre visualiza todos os personagens, mas a edição mecânica pelo mestre só
   será adicionada depois, junto com um histórico auditável de alterações;
@@ -251,24 +261,30 @@ Decisões:
 
 Entrega vertical:
 
-1. persistir campanhas, membros, pacotes de regras versionados e personagens;
+1. persistir campanhas, membros, pacotes de regras versionados, identidades de
+   personagem e suas versões independentes por campanha;
 2. permitir ao mestre criar uma campanha, definir a ativa e associar ou remover
    jogadores;
 3. permitir ao jogador criar, renomear, ativar e retirar seus personagens na
-   campanha da qual participa;
-4. mostrar ao mestre a lista consolidada dos membros e personagens da campanha
+   campanha da qual participa, preservando também os estados morto e rascunho;
+4. permitir criar uma versão de campanha a partir de uma identidade existente,
+   começando no nível inicial ou copiando um retrato autorizado de outra
+   campanha, sempre mantendo as progressões futuras independentes;
+5. mostrar ao mestre a lista consolidada dos membros e personagens da campanha
    ativa;
-5. aplicar propriedade e associação à campanha em todas as APIs, impedindo
+6. aplicar propriedade e associação à campanha em todas as APIs, impedindo
    leitura ou alteração cruzada entre jogadores;
-6. preservar os dados e a seleção ativa após reiniciar o Loremaster e migrar um
+7. preservar os dados e a seleção ativa após reiniciar o Loremaster e migrar um
    banco existente com backup automático.
 
 **Aceite:** o mestre cria “Return of the Setting Sun”, associa quatro contas de
-jogador e fixa o pacote D&D 5e 2024. Cada jogador cria até N personagens e marca
-somente um como ativo, sem conseguir ler ou alterar fichas alheias. O mestre vê
-todos os membros e personagens, mas não edita seus dados mecânicos. Campanha,
-associações, personagens ativos e versão das regras permanecem após reiniciar a
-aplicação.
+jogador e fixa o pacote D&D 5e 2024. Cada jogador cria até N versões de
+personagem por campanha e marca somente uma como ativa, sem conseguir ler ou
+alterar fichas alheias. Uma mesma identidade pode originar versões independentes
+em campanhas diferentes, começando novamente ou a partir de um retrato aprovado
+pelo mestre. O mestre vê todos os membros e personagens, mas não edita seus dados
+mecânicos. Campanha, associações, personagens ativos, linhagem entre versões e
+versão das regras permanecem após reiniciar a aplicação.
 
 Ficam fora deste incremento: atributos, espécie, antecedente, classe, perícias,
 equipamento, cálculos derivados, progressão de nível, conteúdo dos livros e
