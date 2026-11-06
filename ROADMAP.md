@@ -1,3 +1,22 @@
+
+- [Loremaster — Roadmap 2](#loremaster--roadmap-2)
+  - [Forma de trabalho](#forma-de-trabalho)
+  - [Roadmap 1 — estado consolidado](#roadmap-1--estado-consolidado)
+  - [R2.1 — Base confiável e redução do débito técnico](#r21--base-confiável-e-redução-do-débito-técnico)
+  - [R2.2 — Retorno à mesa](#r22--retorno-à-mesa)
+  - [Débito operacional posterior](#débito-operacional-posterior)
+  - [R2.3 — Mixer operacional — conclusão do M15](#r23--mixer-operacional--conclusão-do-m15)
+  - [R2.4 — Integração OBS](#r24--integração-obs)
+  - [R2.5 — Iluminação e automação](#r25--iluminação-e-automação)
+  - [R2.6 — Sound design incremental](#r26--sound-design-incremental)
+  - [R3 — Personagens da party](#r3--personagens-da-party)
+    - [Incremento 1 — campanha e propriedade dos personagens](#incremento-1--campanha-e-propriedade-dos-personagens)
+    - [Incremento 2 — criador guiado: atributos](#incremento-2--criador-guiado-atributos)
+    - [Incremento 3 — classe, HP e reconstrução de personagem existente](#incremento-3--classe-hp-e-reconstrução-de-personagem-existente)
+  - [Manutenção dos assets frontend](#manutenção-dos-assets-frontend)
+
+
+
 # Loremaster — Roadmap 2
 
 O Loremaster é uma ferramenta local-first para áudio, luz e ambientação em
@@ -226,7 +245,7 @@ Validação real concluída no notebook após `git pull`, sincronização das
 dependências, bootstrap da conta `gm` e execução do fluxo autenticado. O
 resultado foi confirmado pelo mestre como funcional.
 
-### Próximo incremento — campanha e propriedade dos personagens
+### Incremento 1 — campanha e propriedade dos personagens
 
 **Objetivo:** entregar a fundação multiusuário que permitirá construir o
 criador de nível 1 sem misturar identidade, campanha, regras e ficha.
@@ -349,7 +368,7 @@ A continuidade mecânica autorizada, as escolhas guiadas para alcançar níveis
 iniciais maiores e a ficha completa continuam fora desta entrega; reutilizar a
 identidade não sincroniza nem simula progressão entre campanhas.
 
-### Incremento — criador guiado: atributos
+### Incremento 2 — criador guiado: atributos
 
 **Objetivo:** estabelecer o fluxo persistente e retomável que as próximas
 etapas de criação reutilizarão, começando por atributos validados no servidor.
@@ -407,7 +426,7 @@ vê apenas o progresso. Após concluir seis atributos válidos, o jogador pode
 ativar a versão; uma identidade reutilizada em outra campanha começa sem dados
 mecânicos copiados.
 
-### Incremento — classe, HP e reconstrução de personagem existente
+### Incremento 3 — classe, HP e reconstrução de personagem existente
 
 **Objetivo:** atender tanto personagens novos quanto campanhas já em andamento,
 sem rerrolar ou inventar o histórico mecânico de uma ficha existente.
