@@ -16,8 +16,12 @@
       - [Seleção de campanha pelo jogador](#seleção-de-campanha-pelo-jogador)
   - [Release v0.1.0 — sessão de 21/11](#release-v010--sessão-de-2111)
     - [Incremento 1 — arquitetura integrada da sessão](#incremento-1--arquitetura-integrada-da-sessão)
+      - [Modelo persistente e lifecycle](#modelo-persistente-e-lifecycle)
+      - [Acesso e experiência](#acesso-e-experiência)
+      - [Critérios de aceite do lifecycle](#critérios-de-aceite-do-lifecycle)
     - [Incremento 2 — executor de áudio no navegador](#incremento-2--executor-de-áudio-no-navegador)
     - [Incremento 3 — gerenciamento de sessão e combate](#incremento-3--gerenciamento-de-sessão-e-combate)
+      - [Contrato do primeiro MVP de combate](#contrato-do-primeiro-mvp-de-combate)
     - [Incremento 4 — conclusão mínima do personagem](#incremento-4--conclusão-mínima-do-personagem)
     - [Incremento 5 — publicação e operação](#incremento-5--publicação-e-operação)
     - [Incremento 6 — aceite da v0.1.0](#incremento-6--aceite-da-v010)
@@ -535,11 +539,84 @@ aceite.
 
 ### Incremento 1 — arquitetura integrada da sessão
 
-- definir o ciclo de vida da sessão e o papel do cliente do Mestre;
-- manter estado autoritativo no servidor para sessão, campanhas e personagens;
-- separar capacidade disponível de superfície publicamente exposta;
-- especificar o menor fluxo de combate necessário para a sessão de 21/11;
-- registrar critérios de aceite antes de iniciar o incremento de combate.
+Este incremento entrega um corte vertical utilizável do lifecycle de sessões,
+não apenas documentação. Campanha, sessão de jogo e encontro são conceitos
+independentes:
+
+```text
+Campanha
+  └── Sessões de jogo
+        └── Encontros de combate
+              └── Rodadas e turnos
+```
+
+Selecionar uma campanha não inicia campanha nem sessão. Iniciar uma sessão não
+conclui o planejamento da campanha: o Mestre deve primeiro executar a ação
+separada de iniciar a campanha, que muda `planning` para `in_progress` e trava
+nível inicial e limite de personagens.
+
+#### Modelo persistente e lifecycle
+
+- usar `game_sessions`, pois `sessions` já armazena sessões de autenticação;
+- identificar cada sessão por número e título opcional;
+- exigir que o primeiro número seja informado pelo Mestre, permitindo migrar
+  campanhas que já estejam, por exemplo, na sessão 6;
+- sugerir o maior número existente mais um nas sessões seguintes, mantendo o
+  campo editável, permitindo lacunas e rejeitando duplicatas na campanha;
+- aceitar sessão 0 para campanhas que usem uma sessão zero;
+- criar a sessão diretamente em `live`, sem um estado intermediário `draft`;
+- suportar `live`, `paused` e `completed`, sem reabrir uma sessão encerrada;
+- permitir pausar, retomar ou encerrar uma sessão ao vivo, e retomar ou encerrar
+  uma sessão pausada;
+- permitir no máximo uma sessão `live` ou `paused` por campanha, protegida
+  também por índice parcial no SQLite;
+- bloquear novas sessões em campanhas `planning` ou `completed`;
+- manter a campanha `in_progress` ao encerrar uma sessão;
+- persistir uma `revision` e exigir `expected_revision` nas mutações para
+  rejeitar comandos concorrentes ou baseados em estado obsoleto;
+- manter um log append-only em `game_session_events` com tipo, revisão, ator,
+  payload e horário para `session_started`, `session_paused`, `session_resumed`
+  e `session_completed`.
+
+O estado materializado em `game_sessions` é a fonte autoritativa após reinício,
+pausa ou reconexão. O log existe para auditoria e para sustentar os comandos de
+combate posteriores, sem exigir reconstruir o estado corrente a cada leitura.
+
+#### Acesso e experiência
+
+- somente `gm` pode iniciar, pausar, retomar ou encerrar uma sessão;
+- jogadores recebem visão somente leitura da sessão da campanha que eles
+  próprios selecionaram, sempre validada contra a membership atual;
+- a campanha administrativamente selecionada pelo Mestre não restringe o
+  contexto visualizado por jogadores;
+- a página de campanhas permanece `summary-first`, mostrando sessão atual ou
+  última sessão e abrindo um modal delimitado para número e título;
+- o controle prolongado usa uma página própria de sessão, inicialmente com
+  campanha, número, título, estado, horários, ações e histórico básico;
+- a visão do jogador acompanha as transições em tempo real sem oferecer ações;
+- não abrir o WebSocket de áudio `/ws` para jogadores; criar um canal de sessão
+  autenticado, filtrado por campanha e com payloads adequados ao papel;
+- manter mutações em APIs REST protegidas por autenticação e CSRF; o WebSocket
+  é servidor → cliente e entrega snapshot autoritativo após reconexão;
+- renomear internamente a rota atualmente chamada `start_first_session`, pois
+  ela inicia a campanha, não uma sessão de jogo, preservando a URL somente se
+  necessário para compatibilidade.
+
+#### Critérios de aceite do lifecycle
+
+1. O Mestre inicia a campanha separadamente e cria manualmente a sessão 6.
+2. A criação seguinte sugere 7, mas aceita edição e rejeita número duplicado.
+3. Não é possível abrir outra sessão enquanto a atual estiver ao vivo ou
+   pausada, inclusive sob requisições concorrentes.
+4. Pausar, recarregar e reiniciar o Loremaster preserva o estado pausado.
+5. O Mestre retoma e encerra; a campanha continua `in_progress`.
+6. A sessão encerrada permanece no histórico e não pode ser reaberta.
+7. Jogador associado acompanha transições em tempo real sem poder alterá-las.
+8. Jogador não associado não lê a sessão nem recebe eventos dela.
+9. Duas abas do Mestre não aplicam comandos a partir da mesma revisão.
+10. A migração preserva bancos existentes e a suíte cobre lifecycle,
+    autorização, membership, concorrência, persistência e WebSocket.
+11. O fluxo completo é exercitado em navegador real antes da publicação.
 
 ### Incremento 2 — executor de áudio no navegador
 
@@ -552,14 +629,30 @@ aceite.
 
 ### Incremento 3 — gerenciamento de sessão e combate
 
-- abrir, acompanhar e encerrar uma sessão explicitamente;
-- implementar somente o fluxo de combate aprovado para o primeiro MVP;
-- persistir o estado necessário para reconexão e auditoria;
-- integrar os participantes às versões ativas dos personagens;
-- manter decisões de jogo sob controle do Mestre e dos jogadores responsáveis.
+O combate usa as sessões persistentes do Incremento 1. O servidor mantém estado
+autoritativo para reconexão e auditoria, integra personagens ativos da campanha
+e mantém todas as decisões sob controle do Mestre.
 
-O escopo detalhado deste incremento permanece bloqueado até a definição do
-fluxo mínimo de combate pelo Mestre.
+#### Contrato do primeiro MVP de combate
+
+- permitir um encontro ativo por sessão, preservando o histórico dos encontros
+  finalizados e cancelados;
+- permitir cancelar sem aplicar alterações às fichas, preservando o encontro
+  no histórico com estado `cancelled`;
+- representar inimigos, aliados e NPCs como participantes manuais do encontro,
+  sem exigir fichas persistentes completas;
+- controlar iniciativa, ordem, rodadas e turnos;
+- controlar HP, HP temporário, dano, cura, condições e testes de morte;
+- manter alterações de HP dos personagens no encontro até o Mestre revisar e
+  finalizar; a aplicação às fichas ocorre em uma única transação;
+- alertar quando uma condição vencer, sem removê-la automaticamente;
+- ao encerrar o encontro, pedir confirmação individual das condições que
+  continuam no estado da sessão;
+- ao atingir três falhas em testes de morte, alertar e exigir confirmação do
+  Mestre antes de marcar a versão do personagem como `dead`;
+- permitir somente ao Mestre alterar o estado do combate na primeira versão;
+- permitir que jogadores acompanhem ordem, turno e condições em tempo real,
+  mantendo oculto o HP exato de inimigos.
 
 ### Incremento 4 — conclusão mínima do personagem
 
