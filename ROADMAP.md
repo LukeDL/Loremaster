@@ -234,8 +234,15 @@ Decisões:
 
 - o modelo suporta várias campanhas, mas a interface opera sobre uma única
   campanha ativa por vez;
+- a campanha possui um ciclo próprio, separado da seleção ativa da interface:
+  `planning` (não iniciada), `in_progress` (em andamento) e `completed`
+  (concluída). Marcar uma campanha como a selecionada no Loremaster não inicia
+  sua primeira sessão;
 - o mestre cria a campanha, escolhe o pacote de regras e associa jogadores pela
   interface;
+- enquanto a campanha está em `planning`, o mestre define o nível inicial e as
+  restrições de entrada. Ao iniciar explicitamente a primeira sessão, a campanha
+  passa para `in_progress` e essas configurações mecânicas ficam bloqueadas;
 - cada jogador pode manter vários personagens na mesma campanha, com no máximo
   um personagem ativo;
 - personagens não são apagados durante o uso normal: podem ficar em `draft`
@@ -245,9 +252,11 @@ Decisões:
   mas cada participação possui progressão, estado e dados mecânicos próprios;
 - ao reutilizar um personagem em outra campanha, o jogador pode começar uma nova
   versão no nível inicial definido pela campanha ou solicitar a continuidade a
-  partir de um retrato da versão anterior. A continuidade depende de autorização
-  do mestre e cria uma cópia independente, sem sincronização posterior entre as
-  campanhas;
+  partir de um retrato da versão anterior. A versão só pode ser inscrita no nível
+  inicial exato: progressões acima dele não podem ser importadas; versões abaixo
+  dele percorrem sequencialmente os níveis faltantes no criador, com todas as
+  escolhas feitas pelo jogador. A continuidade depende de autorização do mestre
+  e cria uma cópia independente, sem sincronização posterior entre campanhas;
 - o limite `N` é contado por versões de personagem dentro de cada campanha, não
   pela quantidade global de identidades conceituais do jogador;
 - o jogador cria e altera somente os próprios personagens;
@@ -265,16 +274,21 @@ Entrega vertical:
    personagem e suas versões independentes por campanha;
 2. permitir ao mestre criar uma campanha, definir a ativa e associar ou remover
    jogadores;
-3. permitir ao jogador criar, renomear, ativar e retirar seus personagens na
+3. permitir ao mestre configurar o nível inicial enquanto a campanha não começou
+   e iniciá-la explicitamente, bloqueando depois as restrições mecânicas de
+   entrada;
+4. permitir ao jogador criar, renomear, ativar e retirar seus personagens na
    campanha da qual participa, preservando também os estados morto e rascunho;
-4. permitir criar uma versão de campanha a partir de uma identidade existente,
+5. permitir criar uma versão de campanha a partir de uma identidade existente,
    começando no nível inicial ou copiando um retrato autorizado de outra
-   campanha, sempre mantendo as progressões futuras independentes;
-5. mostrar ao mestre a lista consolidada dos membros e personagens da campanha
+   campanha. Versões abaixo do nível inicial percorrem no criador cada evolução
+   faltante; versões acima só podem reutilizar a identidade e recomeçar no nível
+   exigido, sempre mantendo as progressões futuras independentes;
+6. mostrar ao mestre a lista consolidada dos membros e personagens da campanha
    ativa;
-6. aplicar propriedade e associação à campanha em todas as APIs, impedindo
+7. aplicar propriedade e associação à campanha em todas as APIs, impedindo
    leitura ou alteração cruzada entre jogadores;
-7. preservar os dados e a seleção ativa após reiniciar o Loremaster e migrar um
+8. preservar os dados e a seleção ativa após reiniciar o Loremaster e migrar um
    banco existente com backup automático.
 
 **Aceite:** o mestre cria “Return of the Setting Sun”, associa quatro contas de
@@ -282,8 +296,10 @@ jogador e fixa o pacote D&D 5e 2024. Cada jogador cria até N versões de
 personagem por campanha e marca somente uma como ativa, sem conseguir ler ou
 alterar fichas alheias. Uma mesma identidade pode originar versões independentes
 em campanhas diferentes, começando novamente ou a partir de um retrato aprovado
-pelo mestre. O mestre vê todos os membros e personagens, mas não edita seus dados
-mecânicos. Campanha, associações, personagens ativos, linhagem entre versões e
+pelo mestre, sempre no nível inicial exigido. Ao iniciar a primeira sessão, o
+mestre bloqueia as restrições mecânicas de entrada da campanha. O mestre vê todos
+os membros e personagens, mas não edita seus dados mecânicos. Campanha, estado do
+ciclo, nível inicial, associações, personagens ativos, linhagem entre versões e
 versão das regras permanecem após reiniciar a aplicação.
 
 Ficam fora deste incremento: atributos, espécie, antecedente, classe, perícias,
