@@ -13,8 +13,11 @@ from loremaster.models.campaign import (
     SetCampaignMembersRequest,
     UpdateCampaignRequest,
 )
+from loremaster.models.character import CampaignRosterPublic
+from loremaster.models.character_repository import campaign_roster
 from loremaster.models.campaign_repository import (
     activate_campaign,
+    complete_campaign,
     create_campaign,
     get_campaign,
     get_rule_pack,
@@ -23,6 +26,7 @@ from loremaster.models.campaign_repository import (
     public_campaign,
     public_rule_pack,
     set_campaign_members,
+    start_campaign,
     update_campaign,
     valid_player_ids,
 )
@@ -73,6 +77,7 @@ async def add_campaign(
         sess,
         name=payload.name,
         rule_pack_id=payload.rule_pack_id,
+        starting_level=payload.starting_level,
         max_characters_per_player=payload.max_characters_per_player,
         member_ids=payload.member_ids,
         activate=payload.activate,
@@ -88,12 +93,16 @@ async def change_campaign(
     sess: AsyncSession = Depends(db_session),
 ) -> CampaignPublic:
     campaign = await _require_campaign(sess, campaign_id)
-    campaign = await update_campaign(
-        sess,
-        campaign,
-        name=payload.name,
-        max_characters_per_player=payload.max_characters_per_player,
-    )
+    try:
+        campaign = await update_campaign(
+            sess,
+            campaign,
+            name=payload.name,
+            max_characters_per_player=payload.max_characters_per_player,
+            starting_level=payload.starting_level,
+        )
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
     return public_campaign(campaign)
 
 
@@ -115,3 +124,36 @@ async def make_active(
 ) -> CampaignPublic:
     campaign = await _require_campaign(sess, campaign_id)
     return public_campaign(await activate_campaign(sess, campaign))
+
+
+@router.post("/{campaign_id}/start", response_model=CampaignPublic)
+async def start_first_session(
+    campaign_id: str,
+    sess: AsyncSession = Depends(db_session),
+) -> CampaignPublic:
+    campaign = await _require_campaign(sess, campaign_id)
+    try:
+        return public_campaign(await start_campaign(sess, campaign))
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+
+
+@router.post("/{campaign_id}/complete", response_model=CampaignPublic)
+async def finish_campaign(
+    campaign_id: str,
+    sess: AsyncSession = Depends(db_session),
+) -> CampaignPublic:
+    campaign = await _require_campaign(sess, campaign_id)
+    try:
+        return public_campaign(await complete_campaign(sess, campaign))
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+
+
+@router.get("/{campaign_id}/roster", response_model=CampaignRosterPublic)
+async def get_campaign_roster(
+    campaign_id: str,
+    sess: AsyncSession = Depends(db_session),
+) -> CampaignRosterPublic:
+    campaign = await _require_campaign(sess, campaign_id)
+    return await campaign_roster(sess, campaign)

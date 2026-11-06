@@ -138,7 +138,59 @@ def test_campaign_administration_keeps_bounded_forms_inside_dialogs(client):
     assert parser.id_tags["campaigns-list"] == "div"
     assert parser.id_tags["create-campaign-dialog"] == "dialog"
     assert parser.id_tags["members-dialog"] == "dialog"
-    assert {"create-campaign", "members-form"} <= parser.ids_inside_dialog
+    assert parser.id_tags["settings-dialog"] == "dialog"
+    assert parser.id_tags["lifecycle-dialog"] == "dialog"
+    assert parser.id_tags["roster-dialog"] == "dialog"
+    assert {
+        "create-campaign",
+        "members-form",
+        "settings-form",
+        "lifecycle-form",
+        "roster-list",
+    } <= parser.ids_inside_dialog
+
+    script = client.get("/campaigns.js")
+    assert script.status_code == 200
+    assert "prompt(" not in script.text
+    assert "alert(" not in script.text
+
+
+def test_player_character_workflows_keep_bounded_forms_inside_dialogs(client):
+    created = client.post(
+        "/api/admin/users",
+        json={
+            "username": "static-player",
+            "password": "test-password-123",
+            "role": "player",
+        },
+    )
+    assert created.status_code == 201
+    client.cookies.clear()
+    client.headers.pop("X-CSRF-Token", None)
+    login = client.post(
+        "/api/auth/login",
+        json={"username": "static-player", "password": "test-password-123"},
+    )
+    assert login.status_code == 200
+    response = client.get("/player")
+    assert response.status_code == 200
+    parser = StructureParser()
+    parser.feed(response.text)
+
+    assert parser.id_tags["characters-list"] == "div"
+    assert parser.id_tags["create-character-dialog"] == "dialog"
+    assert parser.id_tags["rename-character-dialog"] == "dialog"
+    assert parser.id_tags["character-status-dialog"] == "dialog"
+    assert {
+        "create-character",
+        "rename-character",
+        "character-status-form",
+    } <= parser.ids_inside_dialog
+
+    script = client.get("/player.js")
+    assert script.status_code == 200
+    assert "prompt(" not in script.text
+    assert "alert(" not in script.text
 
 
 def test_login_static_ui_serves_only_local_assets(raw_client):

@@ -4,20 +4,89 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#0d1117" />
-    <title>Loremaster — personagem</title>
+    <title>Loremaster — personagens</title>
     <link rel="stylesheet" href="/style.css" />
   </head>
   <body>
     <header>
-      <h1>Loremaster</h1>
+      <h1>Meus personagens</h1>
       <button type="button" onclick="LoremasterAuth.logout()">sair</button>
     </header>
-    <main>
-      <section class="now-playing empty">
-        <h2>Área do jogador</h2>
-        <p>Seu criador de personagem será construído aqui no próximo incremento.</p>
+    <main class="admin-main player-main">
+      <section class="campaigns-toolbar" aria-labelledby="characters-heading">
+        <div>
+          <div class="section-title">campanha selecionada</div>
+          <h2 id="characters-heading">Personagens</h2>
+          <p id="selected-campaign">Carregando campanha…</p>
+        </div>
+        <button id="open-create-character" class="primary" type="button" disabled>+ novo personagem</button>
+      </section>
+      <p id="player-notice" class="inline-notice" role="status" hidden></p>
+      <section class="campaigns-panel" aria-live="polite">
+        <div id="characters-list" class="campaign-grid"></div>
       </section>
     </main>
+
+    <dialog id="create-character-dialog" class="app-dialog">
+      <form id="create-character" class="modal-card">
+        <div class="modal-heading">
+          <div><div class="section-title">nova versão</div><h2>Criar personagem</h2></div>
+          <button class="icon-button" type="button" data-close-dialog aria-label="Fechar">×</button>
+        </div>
+        <div class="modal-body form-stack">
+          <label class="checkbox"><input type="radio" name="source" value="new" checked /> criar uma nova identidade</label>
+          <label class="checkbox"><input type="radio" name="source" value="existing" /> reutilizar personagem de outra campanha</label>
+          <label id="new-character-name">Nome <input name="name" maxlength="200" /></label>
+          <label id="existing-character-picker" hidden>
+            Personagem existente
+            <select name="identity_id"></select>
+          </label>
+          <p class="meta">A versão nasce no nível inicial da campanha e terá progressão independente. O criador mecânico guiado será adicionado em uma próxima etapa.</p>
+          <p id="create-character-error" class="auth-error" role="alert" hidden></p>
+        </div>
+        <div class="modal-actions">
+          <button type="button" data-close-dialog>cancelar</button>
+          <button class="primary" type="submit">criar rascunho</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="rename-character-dialog" class="app-dialog">
+      <form id="rename-character" class="modal-card modal-card-compact">
+        <div class="modal-heading">
+          <div><div class="section-title">identidade</div><h2>Renomear personagem</h2></div>
+          <button class="icon-button" type="button" data-close-dialog aria-label="Fechar">×</button>
+        </div>
+        <div class="modal-body form-stack">
+          <label>Nome <input name="name" maxlength="200" required /></label>
+          <p class="meta">A alteração será refletida em todas as campanhas que usam esta identidade.</p>
+          <p id="rename-character-error" class="auth-error" role="alert" hidden></p>
+        </div>
+        <div class="modal-actions">
+          <button type="button" data-close-dialog>cancelar</button>
+          <button class="primary" type="submit">salvar nome</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="character-status-dialog" class="app-dialog">
+      <form id="character-status-form" class="modal-card modal-card-compact">
+        <div class="modal-heading">
+          <div><div class="section-title">confirmação</div><h2 id="character-status-title">Alterar estado</h2></div>
+          <button class="icon-button" type="button" data-close-dialog aria-label="Fechar">×</button>
+        </div>
+        <div class="modal-body">
+          <p id="character-status-description"></p>
+          <p id="character-status-error" class="auth-error" role="alert" hidden></p>
+        </div>
+        <div class="modal-actions">
+          <button type="button" data-close-dialog>cancelar</button>
+          <button id="character-status-confirm" class="primary" type="submit">confirmar</button>
+        </div>
+      </form>
+    </dialog>
+
     <script src="/auth-client.js"></script>
+    <script src="/player.js"></script>
   </body>
 </html>

@@ -441,6 +441,71 @@ input[type="range"] {
   margin-bottom: 8px;
 }
 
+.status-badges {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.campaign-status.lifecycle-planning {
+  border-color: #8b949e;
+}
+
+.campaign-status.lifecycle-in_progress,
+.character-status-active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.campaign-status.lifecycle-completed,
+.character-status-retired {
+  opacity: 0.75;
+}
+
+.character-status-dead {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.inline-notice {
+  margin: 0;
+  padding: 10px 14px;
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  color: var(--text);
+  background: rgba(88, 166, 255, 0.08);
+}
+
+.roster-list {
+  display: grid;
+  gap: 14px;
+}
+
+.roster-member {
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel-2);
+}
+
+.roster-member h3 {
+  margin: 0 0 10px;
+}
+
+.roster-character {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-top: 1px solid var(--border);
+}
+
+.roster-character .actions {
+  margin: 0;
+}
+
 /* Sticky footer with the big FIM DA CENA button */
 footer {
   position: sticky;

@@ -149,10 +149,10 @@ antes de algumas sessões reais indicarem quais roteamentos são úteis.
 
 ## R3 — Personagens da party
 
-**Status:** autenticação do primeiro MVP implementada e validada pelo mestre no
-notebook real. Criação de campanhas e associação de membros também foram
-validadas no notebook; as revisões visuais de campanhas e jogadores com modais
-aguardam validação. A linha operacional da R2.3 permanece separada.
+**Status:** autenticação e fundação de campanhas validadas pelo mestre no
+notebook real. O ciclo de campanha e o primeiro fluxo de identidades e versões
+independentes de personagem estão implementados e aguardam validação no
+notebook. A linha operacional da R2.3 permanece separada.
 
 Objetivo: permitir que cada jogador crie, evolua e use seu personagem no
 Loremaster, com progressão completa do nível 1 ao 20 segundo D&D 5e 2024. O
@@ -328,6 +328,25 @@ cartões. Fluxos mais extensos devem usar páginas próprias.
 A mesma organização se aplica à administração de jogadores: a página mostra
 cartões resumidos; criação de conta, redefinição de senha e confirmação de
 desativação usam modais, sem formulários permanentes nem prompts do navegador.
+
+Implementado na segunda entrega deste incremento:
+
+- ciclo `planning` → `in_progress` → `completed`, com início explícito da
+  primeira sessão e bloqueio posterior do nível inicial e do limite `N`;
+- identidade conceitual pertencente ao jogador e versões independentes por
+  campanha, sempre criadas no nível inicial configurado;
+- estados `draft`, `active`, `dead` e `retired`, com no máximo uma versão ativa
+  por jogador e campanha; morte e reversão permanecem controles do mestre;
+- área `/player` para criar uma identidade, reutilizá-la em outra campanha,
+  renomeá-la, ativar ou retirar a versão da campanha selecionada;
+- visão consolidada do mestre por campanha, preservação das versões após
+  remoção e readição de membro ou desativação e reativação da conta;
+- migração de bancos existentes, isolamento de propriedade, CSRF e regressões
+  automatizadas para limites, estados, ciclo e acesso cruzado.
+
+A continuidade mecânica autorizada, as escolhas guiadas para alcançar níveis
+iniciais maiores e a ficha completa continuam fora desta entrega; reutilizar a
+identidade não sincroniza nem simula progressão entre campanhas.
 
 **Aceite do primeiro MVP:** o mestre executa o bootstrap local, entra com usuário
 e senha, cria quatro contas de jogador, visualiza todas as fichas e opera a

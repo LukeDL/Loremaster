@@ -91,6 +91,11 @@ class CampaignRow(Base):
             "max_characters_per_player BETWEEN 1 AND 100",
             name="ck_campaigns_character_limit",
         ),
+        CheckConstraint("starting_level BETWEEN 1 AND 20", name="ck_campaigns_starting_level"),
+        CheckConstraint(
+            "lifecycle IN ('planning', 'in_progress', 'completed')",
+            name="ck_campaigns_lifecycle",
+        ),
         Index(
             "uq_campaigns_one_active",
             "is_active",
@@ -103,13 +108,21 @@ class CampaignRow(Base):
     name: Mapped[str] = mapped_column(String(200))
     rule_pack_id: Mapped[str] = mapped_column(ForeignKey("rule_packs.id"), index=True)
     max_characters_per_player: Mapped[int] = mapped_column(default=3, server_default="3")
+    starting_level: Mapped[int] = mapped_column(default=1, server_default="1")
+    lifecycle: Mapped[str] = mapped_column(String(20), default="planning", server_default="planning")
     is_active: Mapped[bool] = mapped_column(default=False, server_default="0")
     created_by_user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
     created_at: Mapped[datetime]
     updated_at: Mapped[datetime]
+    started_at: Mapped[datetime | None] = mapped_column(default=None)
+    completed_at: Mapped[datetime | None] = mapped_column(default=None)
 
     rule_pack: Mapped[RulePackRow] = relationship(back_populates="campaigns")
     memberships: Mapped[list["CampaignMemberRow"]] = relationship(
+        back_populates="campaign",
+        cascade="all, delete-orphan",
+    )
+    character_versions: Mapped[list["CharacterVersionRow"]] = relationship(
         back_populates="campaign",
         cascade="all, delete-orphan",
     )
@@ -130,6 +143,74 @@ class CampaignMemberRow(Base):
 
     campaign: Mapped[CampaignRow] = relationship(back_populates="memberships")
     user: Mapped[UserRow] = relationship()
+
+
+class CharacterIdentityRow(Base):
+    __tablename__ = "character_identities"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    owner_user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        index=True,
+    )
+    name: Mapped[str] = mapped_column(String(200))
+    created_at: Mapped[datetime]
+    updated_at: Mapped[datetime]
+
+    owner: Mapped[UserRow] = relationship()
+    versions: Mapped[list["CharacterVersionRow"]] = relationship(
+        back_populates="identity",
+        cascade="all, delete-orphan",
+    )
+
+
+class CharacterVersionRow(Base):
+    __tablename__ = "character_versions"
+    __table_args__ = (
+        UniqueConstraint(
+            "character_identity_id",
+            "campaign_id",
+            name="uq_character_versions_identity_campaign",
+        ),
+        CheckConstraint(
+            "status IN ('draft', 'active', 'dead', 'retired')",
+            name="ck_character_versions_status",
+        ),
+        CheckConstraint("level BETWEEN 1 AND 20", name="ck_character_versions_level"),
+        Index(
+            "uq_character_versions_one_active",
+            "campaign_id",
+            "owner_user_id",
+            unique=True,
+            sqlite_where=text("status = 'active'"),
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    character_identity_id: Mapped[str] = mapped_column(
+        ForeignKey("character_identities.id", ondelete="CASCADE"),
+        index=True,
+    )
+    owner_user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        index=True,
+    )
+    campaign_id: Mapped[str] = mapped_column(
+        ForeignKey("campaigns.id", ondelete="CASCADE"),
+        index=True,
+    )
+    source_version_id: Mapped[str | None] = mapped_column(
+        ForeignKey("character_versions.id", ondelete="SET NULL"),
+        default=None,
+    )
+    status: Mapped[str] = mapped_column(String(16), default="draft", server_default="draft")
+    level: Mapped[int]
+    created_at: Mapped[datetime]
+    updated_at: Mapped[datetime]
+
+    identity: Mapped[CharacterIdentityRow] = relationship(back_populates="versions")
+    owner: Mapped[UserRow] = relationship()
+    campaign: Mapped[CampaignRow] = relationship(back_populates="character_versions")
 
 
 class AudioFileRow(Base):

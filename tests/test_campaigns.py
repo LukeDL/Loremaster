@@ -51,6 +51,10 @@ def test_gm_creates_campaign_with_versioned_rules_and_members(client):
     campaign = created.json()
     assert campaign["name"] == "Return of the Setting Sun"
     assert campaign["is_active"] is True
+    assert campaign["lifecycle"] == "planning"
+    assert campaign["starting_level"] == 1
+    assert campaign["started_at"] is None
+    assert campaign["completed_at"] is None
     assert campaign["max_characters_per_player"] == 4
     assert [member["username"] for member in campaign["members"]] == ["arthur", "merlin"]
     assert campaign["rule_pack"]["version"] == "1.0.0"
@@ -85,6 +89,64 @@ def test_only_one_campaign_is_active_and_settings_are_editable(client):
     campaigns = client.get("/api/admin/campaigns").json()
     assert [campaign["id"] for campaign in campaigns if campaign["is_active"]] == [first["id"]]
     assert second["id"] != first["id"]
+
+
+def test_campaign_start_locks_entry_settings_without_changing_selection(client):
+    campaign = client.post(
+        "/api/admin/campaigns",
+        json={
+            "name": "Curse of Strahd",
+            "rule_pack_id": "dnd5e-2024-core-v1",
+            "starting_level": 3,
+            "max_characters_per_player": 5,
+        },
+    ).json()
+    assert campaign["lifecycle"] == "planning"
+    assert campaign["starting_level"] == 3
+
+    selected = client.post(f"/api/admin/campaigns/{campaign['id']}/activate")
+    assert selected.status_code == 200
+    assert selected.json()["lifecycle"] == "planning"
+
+    started = client.post(f"/api/admin/campaigns/{campaign['id']}/start")
+    assert started.status_code == 200, started.text
+    assert started.json()["lifecycle"] == "in_progress"
+    assert started.json()["started_at"] is not None
+
+    locked = client.patch(
+        f"/api/admin/campaigns/{campaign['id']}",
+        json={"starting_level": 1, "max_characters_per_player": 6},
+    )
+    assert locked.status_code == 409
+    assert locked.json()["detail"] == "campaign entry settings are locked after start"
+
+    renamed = client.patch(
+        f"/api/admin/campaigns/{campaign['id']}",
+        json={"name": "Curse of Strahd revised"},
+    )
+    assert renamed.status_code == 200
+    assert renamed.json()["name"] == "Curse of Strahd revised"
+
+    duplicate_start = client.post(f"/api/admin/campaigns/{campaign['id']}/start")
+    assert duplicate_start.status_code == 409
+
+    completed = client.post(f"/api/admin/campaigns/{campaign['id']}/complete")
+    assert completed.status_code == 200
+    assert completed.json()["lifecycle"] == "completed"
+    assert completed.json()["completed_at"] is not None
+    assert completed.json()["is_active"] is True
+
+    duplicate_complete = client.post(f"/api/admin/campaigns/{campaign['id']}/complete")
+    assert duplicate_complete.status_code == 409
+
+
+def test_campaign_cannot_complete_before_start(client):
+    campaign = client.post(
+        "/api/admin/campaigns",
+        json={"name": "Planning", "rule_pack_id": "dnd5e-2024-core-v1"},
+    ).json()
+    response = client.post(f"/api/admin/campaigns/{campaign['id']}/complete")
+    assert response.status_code == 409
 
 
 def test_membership_accepts_only_active_players(client):
@@ -155,6 +217,15 @@ def test_campaign_validation_rejects_invalid_limits_and_rule_packs(client):
     )
     assert unknown.status_code == 422
     assert unknown.json()["detail"] == "unknown rule pack"
+    invalid_level = client.post(
+        "/api/admin/campaigns",
+        json={
+            "name": "Invalid level",
+            "rule_pack_id": "dnd5e-2024-core-v1",
+            "starting_level": 21,
+        },
+    )
+    assert invalid_level.status_code == 422
 
 
 @pytest.mark.asyncio
@@ -179,6 +250,7 @@ async def test_campaign_and_membership_survive_database_reopen(tmp_path):
             sess,
             name="Persistent campaign",
             rule_pack_id="dnd5e-2024-core-v1",
+            starting_level=4,
             max_characters_per_player=6,
             member_ids=[player.id],
             activate=True,
@@ -194,6 +266,8 @@ async def test_campaign_and_membership_survive_database_reopen(tmp_path):
             assert len(campaigns) == 1
             assert campaigns[0].name == "Persistent campaign"
             assert campaigns[0].max_characters_per_player == 6
+            assert campaigns[0].starting_level == 4
+            assert campaigns[0].lifecycle == "planning"
             assert campaigns[0].is_active is True
             assert [membership.user.username for membership in campaigns[0].memberships] == [
                 "persistent-player"

@@ -95,7 +95,15 @@ async def test_fresh_database_records_all_migrations_and_enables_foreign_keys(tm
 
     assert applied == MIGRATION_VERSIONS
     assert foreign_keys == 1
-    assert {"users", "sessions", "rule_packs", "campaigns", "campaign_members"} <= tables
+    assert {
+        "users",
+        "sessions",
+        "rule_packs",
+        "campaigns",
+        "campaign_members",
+        "character_identities",
+        "character_versions",
+    } <= tables
 
 
 @pytest.mark.asyncio
@@ -125,8 +133,12 @@ async def test_legacy_database_is_backed_up_and_migrated_without_data_loss(tmp_p
             row[0]
             for row in connection.execute(
                 "SELECT name FROM sqlite_master WHERE type='table' "
-                "AND name IN ('users', 'sessions', 'rule_packs', 'campaigns', 'campaign_members')"
+                "AND name IN ('users', 'sessions', 'rule_packs', 'campaigns', "
+                "'campaign_members', 'character_identities', 'character_versions')"
             )
+        }
+        campaign_columns = {
+            row[1] for row in connection.execute("PRAGMA table_info(campaigns)")
         }
         rule_pack = connection.execute(
             "SELECT id, edition, version, license_name FROM rule_packs"
@@ -142,7 +154,16 @@ async def test_legacy_database_is_backed_up_and_migrated_without_data_loss(tmp_p
         '{"music":1.0,"ambience":1.0,"sfx":1.0}',
     )
     assert applied == MIGRATION_VERSIONS
-    assert new_tables == {"users", "sessions", "rule_packs", "campaigns", "campaign_members"}
+    assert new_tables == {
+        "users",
+        "sessions",
+        "rule_packs",
+        "campaigns",
+        "campaign_members",
+        "character_identities",
+        "character_versions",
+    }
+    assert {"starting_level", "lifecycle", "started_at", "completed_at"} <= campaign_columns
     assert rule_pack == ("dnd5e-2024-core-v1", "2024", "1.0.0", "metadata-only")
     backups = list((tmp_path / "backups").glob("legacy-pre-migration-*.db"))
     assert len(backups) == 1

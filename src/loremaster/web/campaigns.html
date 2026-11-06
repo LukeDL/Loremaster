@@ -50,6 +50,10 @@
             Máximo de personagens por jogador (N)
             <input name="max_characters_per_player" type="number" min="1" max="100" value="3" required />
           </label>
+          <label>
+            Nível inicial
+            <input name="starting_level" type="number" min="1" max="20" value="1" required />
+          </label>
           <fieldset>
             <legend>Jogadores iniciais</legend>
             <div id="create-members" class="member-options"></div>
@@ -84,6 +88,57 @@
         </div>
       </form>
     </dialog>
+    <dialog id="settings-dialog" class="app-dialog">
+      <form id="settings-form" class="modal-card">
+        <div class="modal-heading">
+          <div>
+            <div class="section-title">configurações de entrada</div>
+            <h2 id="settings-dialog-title">Configurar campanha</h2>
+          </div>
+          <button class="icon-button" type="button" data-close-dialog aria-label="Fechar">×</button>
+        </div>
+        <div class="modal-body form-stack">
+          <label>Nome <input name="name" required maxlength="200" /></label>
+          <label>Nível inicial <input name="starting_level" type="number" min="1" max="20" required /></label>
+          <label>Máximo de personagens por jogador (N) <input name="max_characters_per_player" type="number" min="1" max="100" required /></label>
+          <p class="meta">Nível e limite ficam bloqueados após o início da primeira sessão.</p>
+          <p id="settings-error" class="auth-error" role="alert" hidden></p>
+        </div>
+        <div class="modal-actions">
+          <button type="button" data-close-dialog>cancelar</button>
+          <button class="primary" type="submit">salvar configurações</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="lifecycle-dialog" class="app-dialog">
+      <form id="lifecycle-form" class="modal-card modal-card-compact">
+        <div class="modal-heading">
+          <div><div class="section-title">confirmação</div><h2 id="lifecycle-dialog-title">Alterar ciclo</h2></div>
+          <button class="icon-button" type="button" data-close-dialog aria-label="Fechar">×</button>
+        </div>
+        <div class="modal-body">
+          <p id="lifecycle-description"></p>
+          <p id="lifecycle-error" class="auth-error" role="alert" hidden></p>
+        </div>
+        <div class="modal-actions">
+          <button type="button" data-close-dialog>cancelar</button>
+          <button id="lifecycle-confirm" class="primary" type="submit">confirmar</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="roster-dialog" class="app-dialog">
+      <div class="modal-card">
+        <div class="modal-heading">
+          <div><div class="section-title">personagens</div><h2 id="roster-dialog-title">Visão consolidada</h2></div>
+          <button class="icon-button" type="button" data-close-dialog aria-label="Fechar">×</button>
+        </div>
+        <div id="roster-list" class="modal-body roster-list"></div>
+        <div class="modal-actions"><button type="button" data-close-dialog>fechar</button></div>
+      </div>
+    </dialog>
+
     <script src="/auth-client.js"></script>
     <script src="/campaigns.js"></script>
   </body>

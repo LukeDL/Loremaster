@@ -168,6 +168,84 @@ async def _create_campaign_tables(conn: AsyncConnection) -> None:
     )
 
 
+async def _add_campaign_lifecycle_and_characters(conn: AsyncConnection) -> None:
+    await _add_column(
+        conn,
+        "campaigns",
+        "starting_level",
+        "INTEGER NOT NULL DEFAULT 1 CHECK (starting_level BETWEEN 1 AND 20)",
+    )
+    await _add_column(
+        conn,
+        "campaigns",
+        "lifecycle",
+        "VARCHAR(20) NOT NULL DEFAULT 'planning' "
+        "CHECK (lifecycle IN ('planning', 'in_progress', 'completed'))",
+    )
+    await _add_column(conn, "campaigns", "started_at", "DATETIME")
+    await _add_column(conn, "campaigns", "completed_at", "DATETIME")
+    await conn.execute(
+        text(
+            "CREATE TABLE IF NOT EXISTS character_identities ("
+            "id VARCHAR(36) PRIMARY KEY, "
+            "owner_user_id VARCHAR(36) NOT NULL REFERENCES users(id) ON DELETE CASCADE, "
+            "name VARCHAR(200) NOT NULL, "
+            "created_at DATETIME NOT NULL, "
+            "updated_at DATETIME NOT NULL)"
+        )
+    )
+    await conn.execute(
+        text(
+            "CREATE TABLE IF NOT EXISTS character_versions ("
+            "id VARCHAR(36) PRIMARY KEY, "
+            "character_identity_id VARCHAR(36) NOT NULL "
+            "REFERENCES character_identities(id) ON DELETE CASCADE, "
+            "owner_user_id VARCHAR(36) NOT NULL REFERENCES users(id) ON DELETE CASCADE, "
+            "campaign_id VARCHAR(36) NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE, "
+            "source_version_id VARCHAR(36) REFERENCES character_versions(id) ON DELETE SET NULL, "
+            "status VARCHAR(16) NOT NULL DEFAULT 'draft' "
+            "CHECK (status IN ('draft', 'active', 'dead', 'retired')), "
+            "level INTEGER NOT NULL CHECK (level BETWEEN 1 AND 20), "
+            "created_at DATETIME NOT NULL, "
+            "updated_at DATETIME NOT NULL, "
+            "CONSTRAINT uq_character_versions_identity_campaign "
+            "UNIQUE (character_identity_id, campaign_id))"
+        )
+    )
+    for statement in (
+        "CREATE INDEX IF NOT EXISTS ix_character_identities_owner_user_id "
+        "ON character_identities(owner_user_id)",
+        "CREATE INDEX IF NOT EXISTS ix_character_versions_character_identity_id "
+        "ON character_versions(character_identity_id)",
+        "CREATE INDEX IF NOT EXISTS ix_character_versions_owner_user_id "
+        "ON character_versions(owner_user_id)",
+        "CREATE INDEX IF NOT EXISTS ix_character_versions_campaign_id "
+        "ON character_versions(campaign_id)",
+        "CREATE UNIQUE INDEX IF NOT EXISTS uq_character_versions_one_active "
+        "ON character_versions(campaign_id, owner_user_id) WHERE status = 'active'",
+    ):
+        await conn.execute(text(statement))
+    await conn.execute(
+        text(
+            "CREATE TRIGGER IF NOT EXISTS trg_character_version_owner_insert "
+            "BEFORE INSERT ON character_versions "
+            "WHEN NOT EXISTS (SELECT 1 FROM character_identities i "
+            "WHERE i.id = NEW.character_identity_id AND i.owner_user_id = NEW.owner_user_id) "
+            "BEGIN SELECT RAISE(ABORT, 'character identity owner mismatch'); END"
+        )
+    )
+    await conn.execute(
+        text(
+            "CREATE TRIGGER IF NOT EXISTS trg_character_version_limit_insert "
+            "BEFORE INSERT ON character_versions "
+            "WHEN (SELECT COUNT(*) FROM character_versions v "
+            "WHERE v.campaign_id = NEW.campaign_id AND v.owner_user_id = NEW.owner_user_id) "
+            ">= (SELECT max_characters_per_player FROM campaigns c WHERE c.id = NEW.campaign_id) "
+            "BEGIN SELECT RAISE(ABORT, 'campaign character limit reached'); END"
+        )
+    )
+
+
 MIGRATIONS = (
     Migration("001_add_loop_region_columns", _add_loop_region_columns),
     Migration("002_add_scene_entry", _add_scene_entry),
@@ -176,6 +254,7 @@ MIGRATIONS = (
     Migration("005_add_mixer_groups", _add_mixer_groups),
     Migration("006_create_auth_tables", _create_auth_tables),
     Migration("007_create_campaign_tables", _create_campaign_tables),
+    Migration("008_add_campaign_lifecycle_and_characters", _add_campaign_lifecycle_and_characters),
 )
 MIGRATION_VERSIONS = frozenset(migration.version for migration in MIGRATIONS)
 
