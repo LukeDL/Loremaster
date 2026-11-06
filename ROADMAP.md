@@ -13,6 +13,7 @@
     - [Incremento 1 — campanha e propriedade dos personagens](#incremento-1--campanha-e-propriedade-dos-personagens)
     - [Incremento 2 — criador guiado: atributos](#incremento-2--criador-guiado-atributos)
     - [Incremento 3 — classe, HP e reconstrução de personagem existente](#incremento-3--classe-hp-e-reconstrução-de-personagem-existente)
+      - [Seleção de campanha pelo jogador](#seleção-de-campanha-pelo-jogador)
   - [Manutenção dos assets frontend](#manutenção-dos-assets-frontend)
 
 
@@ -469,6 +470,30 @@ Implementado:
   classe, atributos e HP, e revisão da importação em modal no roster do Mestre;
 - regressões para regras de HP, multiclasse, `current_hp = 0`, bloqueio durante
   revisão, correção e nova submissão, ativação após aprovação e migração.
+
+#### Seleção de campanha pelo jogador
+
+A campanha selecionada pelo Mestre é somente o contexto administrativo dele e
+não restringe mais os personagens que cada jogador pode consultar ou alterar.
+Cada jogador mantém sua própria campanha selecionada, persistida na conta e
+validada contra as associações atuais.
+
+- com nenhuma campanha associada, não há contexto de personagem disponível;
+- com uma única campanha, ela é selecionada automaticamente e o seletor fica
+  oculto;
+- com duas ou mais campanhas, a página **Meus personagens** exibe um seletor
+  próprio, persistente e independente da seleção do Mestre;
+- remover o jogador de uma campanha limpa a seleção persistida, impedindo que
+  uma escolha antiga reapareça silenciosamente se a associação for recriada;
+- uma seleção rejeitada pelo servidor faz a interface recarregar o estado
+  autoritativo, sem manter uma opção inválida visível;
+- o seletor e os controles da reconstrução seguem o tema do Loremaster e foram
+  ajustados para telas estreitas sem criar overflow horizontal.
+
+O comportamento possui regressões de isolamento entre jogadores e campanhas,
+validação de associação, limpeza da seleção e contrato da interface. O smoke
+visual confirmou o seletor oculto com uma única campanha e a navegação entre
+duas campanhas em viewport móvel.
 
 **Aceite:** em uma campanha em andamento, o jogador reconstrói um personagem de
 nível 7 como Guerreiro 5/Mago 2, transcreve atributos e HP sem rerrolar, envia um
