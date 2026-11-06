@@ -34,6 +34,7 @@
     completed: "concluída",
   };
   const statusLabels = { draft: "rascunho", active: "ativo", dead: "morto", retired: "retirado" };
+  const creationLabels = { not_started: "não iniciados", in_progress: "em andamento", complete: "concluídos" };
 
   async function request(url, options = {}) {
     const response = await fetch(url, options);
@@ -163,7 +164,9 @@
         name.textContent = character.identity.name;
         const meta = document.createElement("div");
         meta.className = "meta";
-        meta.textContent = `nível ${character.level} · ${statusLabels[character.status]}`;
+        const progress = character.ability_score_progress;
+        const assigned = progress.status === "in_progress" ? ` (${progress.assigned_count}/6)` : "";
+        meta.textContent = `nível ${character.level} · ${statusLabels[character.status]} · atributos ${creationLabels[progress.status]}${assigned}`;
         summary.append(name, meta);
         const actions = document.createElement("div");
         actions.className = "actions";

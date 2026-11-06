@@ -26,6 +26,7 @@
 
   const lifecycleLabels = { planning: "planejamento", in_progress: "em andamento", completed: "concluída" };
   const statusLabels = { draft: "rascunho", active: "ativo", dead: "morto", retired: "retirado" };
+  const creationLabels = { not_started: "não iniciados", in_progress: "em andamento", complete: "concluídos" };
 
   function showDialog(dialog) {
     if (typeof dialog.showModal === "function") dialog.showModal();
@@ -117,12 +118,27 @@
       const rulesValue = document.createElement("strong");
       rulesValue.textContent = `${character.campaign.rule_pack.name} · v${character.campaign.rule_pack.version}`;
       rules.append(rulesLabel, rulesValue);
-      summary.append(level, rules);
+      const creation = document.createElement("div");
+      creation.className = "campaign-stat";
+      const creationLabel = document.createElement("span");
+      creationLabel.textContent = "Atributos";
+      const creationValue = document.createElement("strong");
+      creationValue.textContent = creationLabels[character.ability_score_progress.status];
+      creation.append(creationLabel, creationValue);
+      summary.append(level, rules, creation);
       const actions = document.createElement("div");
       actions.className = "actions";
       actions.append(button("renomear identidade", () => openRename(character)));
       if (character.status === "draft") {
-        actions.append(button("ativar", () => openStatus(character, "activate"), "primary"));
+        const creatorLabel = character.ability_score_progress.status === "not_started"
+          ? "começar atributos"
+          : character.ability_score_progress.status === "complete" ? "revisar atributos" : "continuar criação";
+        actions.append(button(creatorLabel, () => {
+          window.location.assign(`/player/characters/${encodeURIComponent(character.id)}/creator`);
+        }, character.ability_score_progress.status === "complete" ? "" : "primary"));
+        if (character.ability_score_progress.status === "complete") {
+          actions.append(button("ativar", () => openStatus(character, "activate"), "primary"));
+        }
       }
       if (character.status === "draft" || character.status === "active") {
         actions.append(button("retirar", () => openStatus(character, "retire")));
@@ -205,9 +221,9 @@
       createError.hidden = false;
       return;
     }
+    const created = await response.json();
     closeDialog(createDialog);
-    showNotice("Rascunho criado no nível inicial da campanha.");
-    await load();
+    window.location.assign(`/player/characters/${encodeURIComponent(created.id)}/creator`);
   });
 
   renameForm.addEventListener("submit", async (event) => {

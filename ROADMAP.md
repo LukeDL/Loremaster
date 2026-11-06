@@ -150,8 +150,8 @@ antes de algumas sessões reais indicarem quais roteamentos são úteis.
 ## R3 — Personagens da party
 
 **Status:** autenticação e fundação de campanhas validadas pelo mestre no
-notebook real. O ciclo de campanha e o primeiro fluxo de identidades e versões
-independentes de personagem estão implementados e aguardam validação no
+notebook real. O ciclo de campanha, identidades e versões independentes e a
+primeira etapa guiada de atributos estão implementados e aguardam validação no
 notebook. A linha operacional da R2.3 permanece separada.
 
 Objetivo: permitir que cada jogador crie, evolua e use seu personagem no
@@ -347,6 +347,57 @@ Implementado na segunda entrega deste incremento:
 A continuidade mecânica autorizada, as escolhas guiadas para alcançar níveis
 iniciais maiores e a ficha completa continuam fora desta entrega; reutilizar a
 identidade não sincroniza nem simula progressão entre campanhas.
+
+### Incremento — criador guiado: atributos
+
+**Objetivo:** estabelecer o fluxo persistente e retomável que as próximas
+etapas de criação reutilizarão, começando por atributos validados no servidor.
+
+Decisões:
+
+- o primeiro conteúdo redistribuível usa o SRD 5.2.1, sob CC BY 4.0, como fonte
+  legal do pacote público D&D 5e 2024; as Free Rules orientam a experiência,
+  mas não substituem a licença de redistribuição;
+- o pacote anterior, que continha somente metadados provisórios, é migrado para
+  `dnd5e-2024-srd-5.2.1`, preservando as campanhas existentes;
+- os métodos iniciais são array padrão `15, 14, 13, 12, 10, 8` e compra por
+  pontos com orçamento 27 e valores entre 8 e 15;
+- rolagem, bônus de origem e opções do PHB permanecem fora desta etapa. Conteúdo
+  do PHB poderá entrar futuramente apenas como pacote privado fornecido pelo
+  mestre, sem publicação no repositório;
+- atributos pertencem à versão do personagem na campanha, não à identidade
+  global, e não são copiados ao reutilizar a identidade em outra campanha;
+- o jogador pode salvar uma distribuição parcial, sair e retomar. Concluir a
+  etapa exige seis valores válidos e ativar o personagem exige atributos
+  concluídos;
+- alterações posteriores em um rascunho reabrem a etapa. Personagens ativos,
+  mortos ou retirados não podem editar os atributos por esse fluxo;
+- o mestre acompanha `não iniciado`, `em andamento` ou `concluído`, mas não
+  preenche escolhas pelo jogador.
+
+Implementado:
+
+- migração `009_add_srd_ability_scores`, com backup automático já oferecido
+  pelo mecanismo de migrações e sem inventar atributos para versões existentes;
+- tabela por versão de campanha, proveniência pelo pacote fixado na campanha e
+  atribuição do SRD em `THIRD_PARTY_NOTICES.md` e na página do criador;
+- APIs isoladas por propriedade, campanha selecionada e associação atual para
+  carregar, substituir e concluir a distribuição;
+- validação no servidor do multiconjunto do array padrão, tabela de custo da
+  compra por pontos, orçamento, faixas e preenchimento completo;
+- página própria em `/player/characters/{version_id}/creator`, com método,
+  distribuição, modificadores, orçamento, salvamento e retomada;
+- progresso nos cartões do jogador e no roster do mestre, sem controles de
+  edição mecânica para o mestre;
+- regressões de domínio, persistência, ativação, isolamento, remoção e readição
+  de membro, independência entre campanhas, CSRF, migração e contrato da página.
+
+**Aceite:** o jogador cria um rascunho, distribui parcialmente os atributos por
+um dos dois métodos, sai e retoma sem perda. O servidor rejeita valores,
+duplicações ou custos inválidos, outro jogador não acessa o rascunho e o mestre
+vê apenas o progresso. Após concluir seis atributos válidos, o jogador pode
+ativar a versão; uma identidade reutilizada em outra campanha começa sem dados
+mecânicos copiados.
 
 **Aceite do primeiro MVP:** o mestre executa o bootstrap local, entra com usuário
 e senha, cria quatro contas de jogador, visualiza todas as fichas e opera a

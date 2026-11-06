@@ -211,6 +211,54 @@ class CharacterVersionRow(Base):
     identity: Mapped[CharacterIdentityRow] = relationship(back_populates="versions")
     owner: Mapped[UserRow] = relationship()
     campaign: Mapped[CampaignRow] = relationship(back_populates="character_versions")
+    ability_scores: Mapped["CharacterAbilityScoresRow | None"] = relationship(
+        back_populates="character_version",
+        cascade="all, delete-orphan",
+        uselist=False,
+    )
+
+
+class CharacterAbilityScoresRow(Base):
+    __tablename__ = "character_ability_scores"
+    __table_args__ = (
+        CheckConstraint(
+            "method IN ('standard_array', 'point_buy')",
+            name="ck_character_ability_scores_method",
+        ),
+        *(
+            CheckConstraint(
+                f"{ability} IS NULL OR {ability} BETWEEN 8 AND 15",
+                name=f"ck_character_ability_scores_{ability}",
+            )
+            for ability in (
+                "strength",
+                "dexterity",
+                "constitution",
+                "intelligence",
+                "wisdom",
+                "charisma",
+            )
+        ),
+    )
+
+    character_version_id: Mapped[str] = mapped_column(
+        ForeignKey("character_versions.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    method: Mapped[str] = mapped_column(String(20))
+    strength: Mapped[int | None]
+    dexterity: Mapped[int | None]
+    constitution: Mapped[int | None]
+    intelligence: Mapped[int | None]
+    wisdom: Mapped[int | None]
+    charisma: Mapped[int | None]
+    created_at: Mapped[datetime]
+    updated_at: Mapped[datetime]
+    completed_at: Mapped[datetime | None]
+
+    character_version: Mapped[CharacterVersionRow] = relationship(
+        back_populates="ability_scores"
+    )
 
 
 class AudioFileRow(Base):

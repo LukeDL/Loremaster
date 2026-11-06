@@ -7,6 +7,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from loremaster.api.deps import AuthContext, db_session, require_authenticated, require_csrf, require_gm
 from loremaster.models.auth import Role
+from loremaster.models.ability_scores import (
+    AbilityScoresPublic,
+    SUPPORTED_ABILITY_RULE_PACKS,
+    SaveAbilityScoresRequest,
+)
+from loremaster.models.ability_score_repository import (
+    complete_ability_scores,
+    get_ability_scores,
+    public_ability_scores,
+    save_ability_scores,
+)
 from loremaster.models.character import (
     CharacterIdentityPublic,
     CharacterIdentitySummary,
@@ -54,6 +65,29 @@ async def _selected_campaign_or_404(sess: AsyncSession, user_id: str):
     if campaign is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "no selected campaign for player")
     return campaign
+
+
+async def _owned_version_in_selected_campaign(
+    sess: AsyncSession,
+    context: AuthContext,
+    version_id: str,
+):
+    _require_player(context)
+    campaign = await _selected_campaign_or_404(sess, context.user.id)
+    row = await get_owned_version(sess, version_id, context.user.id)
+    if row is None or row.campaign_id != campaign.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "character version not found")
+    return row
+
+
+def _require_ability_creator_available(row) -> None:
+    if row.status != CharacterStatus.DRAFT.value:
+        raise HTTPException(status.HTTP_409_CONFLICT, "only draft characters can be edited")
+    if row.campaign.rule_pack_id not in SUPPORTED_ABILITY_RULE_PACKS:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "ability-score rules are unavailable for this rule pack",
+        )
 
 
 @player_router.get("/campaign", response_model=CharacterCampaignSummary)
@@ -137,16 +171,68 @@ async def _player_status_change(
     context: AuthContext,
     sess: AsyncSession,
 ) -> CharacterVersionPublic:
-    _require_player(context)
-    campaign = await _selected_campaign_or_404(sess, context.user.id)
-    row = await get_owned_version(sess, version_id, context.user.id)
-    if row is None or row.campaign_id != campaign.id:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "character version not found")
+    row = await _owned_version_in_selected_campaign(sess, context, version_id)
     try:
         row = await set_owned_version_status(sess, row, target)
     except ValueError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
     return public_version(row)
+
+
+@player_router.get(
+    "/characters/{version_id}/creator/ability-scores",
+    response_model=AbilityScoresPublic,
+)
+async def ability_scores(
+    version_id: str,
+    context: AuthContext = Depends(require_authenticated),
+    sess: AsyncSession = Depends(db_session),
+) -> AbilityScoresPublic:
+    row = await _owned_version_in_selected_campaign(sess, context, version_id)
+    if row.campaign.rule_pack_id not in SUPPORTED_ABILITY_RULE_PACKS:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "ability-score rules are unavailable for this rule pack",
+        )
+    ability_row = await get_ability_scores(sess, row.id)
+    return public_ability_scores(ability_row, row.id)
+
+
+@player_router.put(
+    "/characters/{version_id}/creator/ability-scores",
+    response_model=AbilityScoresPublic,
+)
+async def save_character_ability_scores(
+    version_id: str,
+    payload: SaveAbilityScoresRequest,
+    context: AuthContext = Depends(require_authenticated),
+    sess: AsyncSession = Depends(db_session),
+) -> AbilityScoresPublic:
+    row = await _owned_version_in_selected_campaign(sess, context, version_id)
+    _require_ability_creator_available(row)
+    try:
+        ability_row = await save_ability_scores(sess, row, payload)
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
+    return public_ability_scores(ability_row, row.id)
+
+
+@player_router.post(
+    "/characters/{version_id}/creator/ability-scores/complete",
+    response_model=AbilityScoresPublic,
+)
+async def complete_character_ability_scores(
+    version_id: str,
+    context: AuthContext = Depends(require_authenticated),
+    sess: AsyncSession = Depends(db_session),
+) -> AbilityScoresPublic:
+    row = await _owned_version_in_selected_campaign(sess, context, version_id)
+    _require_ability_creator_available(row)
+    try:
+        ability_row = await complete_ability_scores(sess, row)
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    return public_ability_scores(ability_row, row.id)
 
 
 @player_router.post("/characters/{version_id}/activate", response_model=CharacterVersionPublic)

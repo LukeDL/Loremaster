@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0d1117" />
+    <title>Loremaster — criar personagem</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <header class="creator-header">
+      <div>
+        <div class="section-title">criador de personagem</div>
+        <h1>Atributos</h1>
+      </div>
+      <a class="button-link" href="/player">voltar aos personagens</a>
+    </header>
+
+    <main class="creator-main">
+      <section class="creator-progress" aria-label="Progresso da criação">
+        <div class="creator-step active"><span>1</span><strong>Atributos</strong><small id="step-status">não iniciado</small></div>
+        <div class="creator-step future"><span>2</span><strong>Origem</strong><small>próximo incremento</small></div>
+        <div class="creator-step future"><span>3</span><strong>Classe</strong><small>futuro</small></div>
+      </section>
+
+      <p id="creator-notice" class="inline-notice" role="status" hidden></p>
+      <p id="creator-error" class="auth-error" role="alert" hidden></p>
+
+      <form id="ability-form" class="creator-layout">
+        <section class="creator-card method-card" aria-labelledby="method-heading">
+          <div class="section-title">método</div>
+          <h2 id="method-heading">Como os valores serão definidos?</h2>
+          <div class="method-options">
+            <label class="method-option">
+              <input type="radio" name="method" value="standard_array" />
+              <span><strong>Array padrão</strong><small>Distribua 15, 14, 13, 12, 10 e 8 uma única vez.</small></span>
+            </label>
+            <label class="method-option">
+              <input type="radio" name="method" value="point_buy" />
+              <span><strong>Compra por pontos</strong><small>Distribua até 27 pontos entre valores de 8 a 15.</small></span>
+            </label>
+          </div>
+        </section>
+
+        <section class="creator-card score-card" aria-labelledby="scores-heading">
+          <div class="score-heading">
+            <div>
+              <div class="section-title">distribuição</div>
+              <h2 id="scores-heading">Seis atributos</h2>
+            </div>
+            <div id="budget-summary" class="budget-summary">Escolha um método</div>
+          </div>
+          <div id="ability-grid" class="ability-grid" aria-live="polite"></div>
+          <p class="meta">Os modificadores são calculados automaticamente. Bônus de antecedente e outras escolhas serão aplicados em etapas posteriores.</p>
+        </section>
+
+        <aside class="creator-card creator-summary" aria-labelledby="summary-heading">
+          <div class="section-title">resumo</div>
+          <h2 id="summary-heading">Etapa de atributos</h2>
+          <dl>
+            <div><dt>Método</dt><dd id="summary-method">não escolhido</dd></div>
+            <div><dt>Preenchidos</dt><dd id="summary-assigned">0 de 6</dd></div>
+            <div><dt>Situação</dt><dd id="summary-status">não iniciada</dd></div>
+          </dl>
+          <div class="creator-actions">
+            <button id="save-exit" type="button">salvar e sair</button>
+            <button id="complete-step" class="primary" type="submit">concluir atributos</button>
+          </div>
+        </aside>
+      </form>
+
+      <p class="srd-attribution">This work includes material from the System Reference Document 5.2.1 (“SRD 5.2.1”) by Wizards of the Coast LLC, available at <a href="https://www.dndbeyond.com/srd">https://www.dndbeyond.com/srd</a>. The SRD 5.2.1 is licensed under the Creative Commons Attribution 4.0 International License, available at <a href="https://creativecommons.org/licenses/by/4.0/legalcode">https://creativecommons.org/licenses/by/4.0/legalcode</a>.</p>
+    </main>
+
+    <script src="/auth-client.js"></script>
+    <script src="/character-creator.js"></script>
+  </body>
+</html>

@@ -7,6 +7,7 @@ from enum import StrEnum
 
 from pydantic import BaseModel, Field, model_validator, field_validator
 
+from loremaster.models.ability_scores import AbilityScoreProgressPublic
 from loremaster.models.campaign import CampaignLifecycle, RulePackPublic
 
 
@@ -37,6 +38,7 @@ class CharacterVersionPublic(BaseModel):
     status: CharacterStatus
     level: int
     source_version_id: str | None
+    ability_score_progress: AbilityScoreProgressPublic
     created_at: datetime
     updated_at: datetime
 
