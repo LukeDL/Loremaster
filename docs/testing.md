@@ -18,6 +18,28 @@ Para julgamentos exclusivamente estéticos, automatizamos o contrato estrutural 
 as interações objetivas. A avaliação estética restante deve ser exercitada nas
 resoluções afetadas e registrada como verificação manual.
 
+## Regressões no navegador
+
+Os contratos visuais objetivos usam Playwright com Chromium. Depois de
+sincronizar o ambiente de desenvolvimento pela primeira vez, instale o navegador
+gerenciado pelo Playwright:
+
+```bash
+uv sync --dev
+uv run playwright install chromium
+```
+
+Em um Linux recém-instalado, se o navegador informar bibliotecas de sistema
+ausentes, instale também essas dependências com permissão administrativa:
+
+```bash
+uv run playwright install --with-deps chromium
+```
+
+A suíte executada por `uv run pytest -q` inclui essas regressões. Ela falha com
+uma instrução explícita quando o Chromium ainda não está instalado; não pula
+silenciosamente a proteção visual.
+
 ## Gate de entrega
 
 Antes de publicar um incremento:
