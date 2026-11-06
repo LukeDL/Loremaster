@@ -37,6 +37,47 @@ class AssetParser(HTMLParser):
         return set(json.loads("".join(self.importmap_chunks)).get("imports", {}).values())
 
 
+class StructureParser(HTMLParser):
+    """Collect stable UI ids and whether they are nested in a dialog."""
+
+    _void_tags = {
+        "area",
+        "base",
+        "br",
+        "col",
+        "embed",
+        "hr",
+        "img",
+        "input",
+        "link",
+        "meta",
+        "source",
+        "track",
+        "wbr",
+    }
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.stack: list[str] = []
+        self.id_tags: dict[str, str] = {}
+        self.ids_inside_dialog: set[str] = set()
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        element_id = dict(attrs).get("id")
+        if element_id:
+            self.id_tags[element_id] = tag
+            if "dialog" in self.stack:
+                self.ids_inside_dialog.add(element_id)
+        if tag not in self._void_tags:
+            self.stack.append(tag)
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag not in self.stack:
+            return
+        reverse_index = self.stack[::-1].index(tag)
+        del self.stack[len(self.stack) - reverse_index - 1 :]
+
+
 def _assert_local_page(client, path: str) -> None:
     response = client.get(path)
     assert response.status_code == 200
@@ -68,6 +109,36 @@ def test_users_static_ui_serves_only_local_assets(client):
 
 def test_campaigns_static_ui_serves_only_local_assets(client):
     _assert_local_page(client, "/campaigns")
+
+
+def test_player_administration_keeps_bounded_forms_inside_dialogs(client):
+    response = client.get("/users")
+    assert response.status_code == 200
+    parser = StructureParser()
+    parser.feed(response.text)
+
+    assert parser.id_tags["users-list"] == "div"
+    assert parser.id_tags["create-player-dialog"] == "dialog"
+    assert parser.id_tags["password-dialog"] == "dialog"
+    assert parser.id_tags["status-dialog"] == "dialog"
+    assert {"create-player", "password-form", "status-form"} <= parser.ids_inside_dialog
+
+    script = client.get("/users.js")
+    assert script.status_code == 200
+    assert "prompt(" not in script.text
+    assert "alert(" not in script.text
+
+
+def test_campaign_administration_keeps_bounded_forms_inside_dialogs(client):
+    response = client.get("/campaigns")
+    assert response.status_code == 200
+    parser = StructureParser()
+    parser.feed(response.text)
+
+    assert parser.id_tags["campaigns-list"] == "div"
+    assert parser.id_tags["create-campaign-dialog"] == "dialog"
+    assert parser.id_tags["members-dialog"] == "dialog"
+    assert {"create-campaign", "members-form"} <= parser.ids_inside_dialog
 
 
 def test_login_static_ui_serves_only_local_assets(raw_client):
