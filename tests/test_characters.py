@@ -132,6 +132,9 @@ def test_same_identity_has_independent_versions_in_different_campaigns(raw_clien
     second = _create_campaign(raw_client, "Strahd", [player["id"]], level=1)
 
     _login(raw_client, "joao", "player-password-123")
+    assert raw_client.put(
+        "/api/player/campaign", json={"campaign_id": second["id"]}
+    ).status_code == 200
     reused = raw_client.post(
         "/api/player/characters",
         json={"identity_id": original["identity"]["id"]},
@@ -176,6 +179,68 @@ def test_player_cannot_use_or_view_another_players_identity(raw_client):
         json={"name": "Stolen"},
     ).status_code == 404
     assert raw_client.post(f"/api/player/characters/{arthur['id']}/activate").status_code == 404
+
+
+def test_each_player_selects_campaign_independently_from_gm_active_campaign(raw_client):
+    _login(raw_client, "test-gm", "test-password-123")
+    joao = _create_player(raw_client, "joao")
+    maria = _create_player(raw_client, "maria")
+    return_campaign = _create_campaign(raw_client, "Return", [joao["id"]])
+    strahd_campaign = _create_campaign(raw_client, "Strahd", [maria["id"]])
+    assert raw_client.post(
+        f"/api/admin/campaigns/{return_campaign['id']}/activate"
+    ).status_code == 200
+
+    _login(raw_client, "joao", "player-password-123")
+    assert raw_client.get("/api/player/campaign").json()["id"] == return_campaign["id"]
+    assert raw_client.post("/api/player/characters", json={"name": "Arthur"}).status_code == 201
+
+    _login(raw_client, "maria", "player-password-123")
+    assert raw_client.get("/api/player/campaign").json()["id"] == strahd_campaign["id"]
+    assert raw_client.post("/api/player/characters", json={"name": "Ireena"}).status_code == 201
+
+
+def test_player_campaign_selection_is_membership_scoped_and_persistent(raw_client):
+    _login(raw_client, "test-gm", "test-password-123")
+    player = _create_player(raw_client, "joao")
+    outsider = _create_player(raw_client, "outsider")
+    first = _create_campaign(raw_client, "Return", [player["id"]])
+    second = _create_campaign(raw_client, "Strahd", [player["id"]])
+    unavailable = _create_campaign(raw_client, "Private", [outsider["id"]])
+
+    _login(raw_client, "joao", "player-password-123")
+    campaigns = raw_client.get("/api/player/campaigns")
+    assert campaigns.status_code == 200
+    assert {row["id"] for row in campaigns.json()} == {first["id"], second["id"]}
+    assert raw_client.get("/api/player/campaign").status_code == 404
+    assert raw_client.put(
+        "/api/player/campaign", json={"campaign_id": unavailable["id"]}
+    ).status_code == 404
+
+    selected = raw_client.put("/api/player/campaign", json={"campaign_id": second["id"]})
+    assert selected.status_code == 200
+    assert selected.json()["id"] == second["id"]
+    assert raw_client.post("/api/player/characters", json={"name": "Ezmerelda"}).status_code == 201
+
+    _login(raw_client, "joao", "player-password-123")
+    assert raw_client.get("/api/player/campaign").json()["id"] == second["id"]
+    assert [row["identity"]["name"] for row in raw_client.get("/api/player/characters").json()] == [
+        "Ezmerelda"
+    ]
+
+    _login(raw_client, "test-gm", "test-password-123")
+    assert raw_client.put(
+        f"/api/admin/campaigns/{second['id']}/members", json={"member_ids": []}
+    ).status_code == 200
+    _login(raw_client, "joao", "player-password-123")
+    assert raw_client.get("/api/player/campaign").json()["id"] == first["id"]
+
+    _login(raw_client, "test-gm", "test-password-123")
+    assert raw_client.put(
+        f"/api/admin/campaigns/{second['id']}/members", json={"member_ids": [player["id"]]}
+    ).status_code == 200
+    _login(raw_client, "joao", "player-password-123")
+    assert raw_client.get("/api/player/campaign").json()["id"] == first["id"]
 
 
 def test_non_member_cannot_create_and_gm_roster_sees_all_versions(raw_client):
@@ -410,8 +475,11 @@ def test_reused_identity_starts_with_independent_ability_progress(raw_client):
     _complete_standard_array(raw_client, original["id"])
 
     _login(raw_client, "test-gm", "test-password-123")
-    _create_campaign(raw_client, "Second", [player["id"]])
+    second = _create_campaign(raw_client, "Second", [player["id"]])
     _login(raw_client, "joao", "player-password-123")
+    assert raw_client.put(
+        "/api/player/campaign", json={"campaign_id": second["id"]}
+    ).status_code == 200
     reused = raw_client.post(
         "/api/player/characters",
         json={"identity_id": original["identity"]["id"]},

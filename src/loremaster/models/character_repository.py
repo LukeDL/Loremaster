@@ -18,6 +18,7 @@ from loremaster.models.character import (
     CharacterIdentitySummary,
     CharacterStatus,
     CharacterVersionPublic,
+    SelectPlayerCampaignRequest,
 )
 from loremaster.models.character_creation import CreationMode, ImportReviewState
 from loremaster.models.character_creation_repository import (
@@ -31,6 +32,7 @@ from loremaster.models.db import (
     CampaignRow,
     CharacterIdentityRow,
     CharacterVersionRow,
+    UserRow,
 )
 
 
@@ -83,16 +85,52 @@ async def get_selected_campaign_for_player(
     sess: AsyncSession,
     owner_user_id: str,
 ) -> CampaignRow | None:
+    user = await sess.get(UserRow, owner_user_id)
+    if user is None:
+        return None
+    campaigns = await list_player_campaigns(sess, owner_user_id)
+    selected = next(
+        (campaign for campaign in campaigns if campaign.id == user.selected_campaign_id),
+        None,
+    )
+    if selected is not None:
+        return selected
+    if len(campaigns) == 1:
+        user.selected_campaign_id = campaigns[0].id
+        await sess.commit()
+        return campaigns[0]
+    return None
+
+
+async def list_player_campaigns(
+    sess: AsyncSession,
+    owner_user_id: str,
+) -> list[CampaignRow]:
     result = await sess.execute(
         select(CampaignRow)
         .join(CampaignMemberRow)
         .options(selectinload(CampaignRow.rule_pack))
-        .where(
-            CampaignRow.is_active.is_(True),
-            CampaignMemberRow.user_id == owner_user_id,
-        )
+        .where(CampaignMemberRow.user_id == owner_user_id)
+        .order_by(CampaignRow.name, CampaignRow.id)
     )
-    return result.scalar_one_or_none()
+    return list(result.scalars().unique())
+
+
+async def select_player_campaign(
+    sess: AsyncSession,
+    owner_user_id: str,
+    payload: SelectPlayerCampaignRequest,
+) -> CampaignRow:
+    campaigns = await list_player_campaigns(sess, owner_user_id)
+    campaign = next((row for row in campaigns if row.id == payload.campaign_id), None)
+    if campaign is None:
+        raise LookupError("campaign membership not found")
+    user = await sess.get(UserRow, owner_user_id)
+    assert user is not None
+    user.selected_campaign_id = campaign.id
+    user.updated_at = utcnow()
+    await sess.commit()
+    return campaign
 
 
 async def get_owned_identity(

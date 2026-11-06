@@ -332,6 +332,15 @@ async def _add_character_classes_imports_and_hp(conn: AsyncConnection) -> None:
         await conn.execute(text(statement))
 
 
+async def _add_player_campaign_selection(conn: AsyncConnection) -> None:
+    await _add_column(
+        conn,
+        "users",
+        "selected_campaign_id",
+        "VARCHAR(36)",
+    )
+
+
 MIGRATIONS = (
     Migration("001_add_loop_region_columns", _add_loop_region_columns),
     Migration("002_add_scene_entry", _add_scene_entry),
@@ -343,6 +352,7 @@ MIGRATIONS = (
     Migration("008_add_campaign_lifecycle_and_characters", _add_campaign_lifecycle_and_characters),
     Migration("009_add_srd_ability_scores", _add_srd_ability_scores),
     Migration("010_add_character_classes_imports_and_hp", _add_character_classes_imports_and_hp),
+    Migration("011_add_player_campaign_selection", _add_player_campaign_selection),
 )
 MIGRATION_VERSIONS = frozenset(migration.version for migration in MIGRATIONS)
 

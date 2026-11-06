@@ -45,6 +45,7 @@ class UserRow(Base):
     created_at: Mapped[datetime]
     updated_at: Mapped[datetime]
     password_changed_at: Mapped[datetime]
+    selected_campaign_id: Mapped[str | None] = mapped_column(String(36), default=None)
 
     sessions: Mapped[list["SessionRow"]] = relationship(
         back_populates="user",

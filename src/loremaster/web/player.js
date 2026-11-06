@@ -1,5 +1,7 @@
 (() => {
   const campaignLabel = document.querySelector("#selected-campaign");
+  const campaignPicker = document.querySelector("#player-campaign-picker");
+  const campaignSelect = document.querySelector("#player-campaign-select");
   const list = document.querySelector("#characters-list");
   const notice = document.querySelector("#player-notice");
   const openCreateButton = document.querySelector("#open-create-character");
@@ -169,27 +171,68 @@
   }
 
   async function load() {
-    const [campaignResponse, charactersResponse, identitiesResponse] = await Promise.all([
+    const [campaignsResponse, campaignResponse, identitiesResponse] = await Promise.all([
+      fetch("/api/player/campaigns"),
       fetch("/api/player/campaign"),
-      fetch("/api/player/characters"),
       fetch("/api/player/character-identities"),
     ]);
+    if (!campaignsResponse.ok || !identitiesResponse.ok) {
+      throw new Error("Não foi possível carregar suas campanhas.");
+    }
+    const campaigns = await campaignsResponse.json();
+    identities = await identitiesResponse.json();
+    campaignSelect.replaceChildren();
+    if (campaigns.length > 1) {
+      const placeholder = document.createElement("option");
+      placeholder.value = "";
+      placeholder.textContent = "Escolha uma campanha";
+      campaignSelect.append(placeholder);
+    }
+    for (const available of campaigns) {
+      const option = document.createElement("option");
+      option.value = available.id;
+      option.textContent = available.name;
+      campaignSelect.append(option);
+    }
+    campaignPicker.hidden = campaigns.length < 2;
     if (campaignResponse.status === 404) {
-      campaignLabel.textContent = "Você ainda não faz parte da campanha selecionada pelo Mestre.";
-      list.innerHTML = '<div class="empty-state">Peça ao Mestre para associar sua conta a uma campanha selecionada.</div>';
+      campaign = null;
+      campaignSelect.value = "";
+      campaignLabel.textContent = campaigns.length
+        ? "Escolha uma das suas campanhas para ver e administrar os personagens."
+        : "Você ainda não faz parte de nenhuma campanha.";
+      list.innerHTML = '<div class="empty-state">Nenhuma campanha selecionada.</div>';
       openCreateButton.disabled = true;
       return;
     }
-    if (!campaignResponse.ok || !charactersResponse.ok || !identitiesResponse.ok) {
+    if (!campaignResponse.ok) {
       throw new Error("Não foi possível carregar seus personagens.");
     }
     campaign = await campaignResponse.json();
+    campaignSelect.value = campaign.id;
+    const charactersResponse = await fetch("/api/player/characters");
+    if (!charactersResponse.ok) throw new Error("Não foi possível carregar seus personagens.");
     const characters = await charactersResponse.json();
-    identities = await identitiesResponse.json();
     campaignLabel.textContent = `${campaign.name} · nível inicial ${campaign.starting_level} · ${lifecycleLabels[campaign.lifecycle]}`;
     renderCharacters(characters);
     openCreateButton.disabled = false;
   }
+
+  campaignSelect.addEventListener("change", async () => {
+    if (!campaignSelect.value) return;
+    openCreateButton.disabled = true;
+    const response = await fetch("/api/player/campaign", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ campaign_id: campaignSelect.value }),
+    });
+    if (!response.ok) {
+      showNotice("Não foi possível selecionar esta campanha.");
+      await load();
+      return;
+    }
+    await load();
+  });
 
   openCreateButton.addEventListener("click", () => {
     createForm.reset();

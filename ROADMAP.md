@@ -233,8 +233,10 @@ criador de nível 1 sem misturar identidade, campanha, regras e ficha.
 
 Decisões:
 
-- o modelo suporta várias campanhas, mas a interface opera sobre uma única
-  campanha ativa por vez;
+- o modelo suporta várias campanhas. A seleção administrativa do mestre e a
+  campanha visualizada por cada jogador são independentes: cada jogador escolhe
+  e persiste uma campanha entre aquelas das quais participa; quando participa
+  de apenas uma, ela é selecionada automaticamente;
 - a campanha possui um ciclo próprio, separado da seleção ativa da interface:
   `planning` (não iniciada), `in_progress` (em andamento) e `completed`
   (concluída). Marcar uma campanha como a selecionada no Loremaster não inicia
@@ -312,7 +314,8 @@ Implementado na primeira entrega deste incremento:
 - criação de campanhas pelo mestre com nome, pacote de regras e limite `N` de
   personagens por jogador;
 - associação de contas ativas de jogadores durante ou após a criação;
-- seleção de uma única campanha ativa por vez;
+- seleção administrativa de uma campanha ativa pelo mestre e seleção própria,
+  persistente e isolada para cada jogador;
 - pacote D&D 5e 2024 com metadados versionados, sem conteúdo proprietário;
 - persistência no SQLite, migração com backup, autorização exclusiva do mestre
   e proteção CSRF;

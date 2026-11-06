@@ -184,6 +184,7 @@ def test_player_character_workflows_keep_bounded_forms_inside_dialogs(client):
     parser.feed(response.text)
 
     assert parser.id_tags["characters-list"] == "div"
+    assert parser.id_tags["player-campaign-select"] == "select"
     assert parser.id_tags["create-character-dialog"] == "dialog"
     assert parser.id_tags["rename-character-dialog"] == "dialog"
     assert parser.id_tags["character-status-dialog"] == "dialog"
