@@ -495,6 +495,10 @@ validação de associação, limpeza da seleção e contrato da interface. O smo
 visual confirmou o seletor oculto com uma única campanha e a navegação entre
 duas campanhas em viewport móvel.
 
+Validação real concluída no notebook: o Mestre manteve uma campanha em seu
+contexto administrativo enquanto o jogador selecionou e consultou outra
+campanha de forma independente. O comportamento foi confirmado como funcional.
+
 **Aceite:** em uma campanha em andamento, o jogador reconstrói um personagem de
 nível 7 como Guerreiro 5/Mago 2, transcreve atributos e HP sem rerrolar, envia um
 snapshot e fica impedido de alterá-lo até o Mestre aprovar ou devolver. Após a
