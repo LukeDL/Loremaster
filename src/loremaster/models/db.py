@@ -177,6 +177,10 @@ class CharacterVersionRow(Base):
             name="ck_character_versions_status",
         ),
         CheckConstraint("level BETWEEN 1 AND 20", name="ck_character_versions_level"),
+        CheckConstraint(
+            "creation_mode IN ('new_character', 'manual_import')",
+            name="ck_character_versions_creation_mode",
+        ),
         Index(
             "uq_character_versions_one_active",
             "campaign_id",
@@ -205,6 +209,9 @@ class CharacterVersionRow(Base):
     )
     status: Mapped[str] = mapped_column(String(16), default="draft", server_default="draft")
     level: Mapped[int]
+    creation_mode: Mapped[str] = mapped_column(
+        String(20), default="new_character", server_default="new_character"
+    )
     created_at: Mapped[datetime]
     updated_at: Mapped[datetime]
 
@@ -215,6 +222,21 @@ class CharacterVersionRow(Base):
         back_populates="character_version",
         cascade="all, delete-orphan",
         uselist=False,
+    )
+    creation_state: Mapped["CharacterCreationStateRow | None"] = relationship(
+        back_populates="character_version", cascade="all, delete-orphan", uselist=False
+    )
+    class_levels: Mapped[list["CharacterClassLevelRow"]] = relationship(
+        back_populates="character_version", cascade="all, delete-orphan"
+    )
+    imported_ability_scores: Mapped["CharacterImportedAbilityScoresRow | None"] = relationship(
+        back_populates="character_version", cascade="all, delete-orphan", uselist=False
+    )
+    hit_points: Mapped["CharacterHitPointsRow | None"] = relationship(
+        back_populates="character_version", cascade="all, delete-orphan", uselist=False
+    )
+    import_reviews: Mapped[list["CharacterImportReviewRow"]] = relationship(
+        back_populates="character_version", cascade="all, delete-orphan"
     )
 
 
@@ -259,6 +281,102 @@ class CharacterAbilityScoresRow(Base):
     character_version: Mapped[CharacterVersionRow] = relationship(
         back_populates="ability_scores"
     )
+
+
+class CharacterCreationStateRow(Base):
+    __tablename__ = "character_creation_states"
+    __table_args__ = (CheckConstraint("revision >= 0", name="ck_character_creation_revision"),)
+
+    character_version_id: Mapped[str] = mapped_column(
+        ForeignKey("character_versions.id", ondelete="CASCADE"), primary_key=True
+    )
+    class_completed_at: Mapped[datetime | None]
+    revision: Mapped[int] = mapped_column(default=0, server_default="0")
+    created_at: Mapped[datetime]
+    updated_at: Mapped[datetime]
+    character_version: Mapped[CharacterVersionRow] = relationship(back_populates="creation_state")
+
+
+class CharacterClassLevelRow(Base):
+    __tablename__ = "character_class_levels"
+    __table_args__ = (
+        CheckConstraint("levels BETWEEN 1 AND 20", name="ck_character_class_levels"),
+        Index("uq_character_class_starting", "character_version_id", unique=True, sqlite_where=text("is_starting_class = 1")),
+    )
+
+    character_version_id: Mapped[str] = mapped_column(ForeignKey("character_versions.id", ondelete="CASCADE"), primary_key=True)
+    class_key: Mapped[str] = mapped_column(String(40), primary_key=True)
+    levels: Mapped[int]
+    is_starting_class: Mapped[bool] = mapped_column(default=False, server_default="0")
+    created_at: Mapped[datetime]
+    updated_at: Mapped[datetime]
+    character_version: Mapped[CharacterVersionRow] = relationship(back_populates="class_levels")
+
+
+class CharacterImportedAbilityScoresRow(Base):
+    __tablename__ = "character_imported_ability_scores"
+    __table_args__ = tuple(
+        CheckConstraint(f"{ability} BETWEEN 1 AND 30", name=f"ck_character_imported_{ability}")
+        for ability in ("strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma")
+    )
+
+    character_version_id: Mapped[str] = mapped_column(ForeignKey("character_versions.id", ondelete="CASCADE"), primary_key=True)
+    strength: Mapped[int]
+    dexterity: Mapped[int]
+    constitution: Mapped[int]
+    intelligence: Mapped[int]
+    wisdom: Mapped[int]
+    charisma: Mapped[int]
+    attestation: Mapped[str] = mapped_column(String(500))
+    created_at: Mapped[datetime]
+    updated_at: Mapped[datetime]
+    character_version: Mapped[CharacterVersionRow] = relationship(back_populates="imported_ability_scores")
+
+
+class CharacterHitPointsRow(Base):
+    __tablename__ = "character_hit_points"
+    __table_args__ = (
+        CheckConstraint("source IN ('level_one_formula', 'fixed_progression', 'manual_import')", name="ck_character_hp_source"),
+        CheckConstraint("baseline_level BETWEEN 1 AND 20", name="ck_character_hp_level"),
+        CheckConstraint("maximum_hp >= 1", name="ck_character_hp_maximum"),
+        CheckConstraint("maximum_hp <= 1000000", name="ck_character_hp_maximum_bound"),
+        CheckConstraint("current_hp BETWEEN 0 AND maximum_hp", name="ck_character_hp_current"),
+        CheckConstraint(
+            "temporary_hp BETWEEN 0 AND 1000000", name="ck_character_hp_temporary"
+        ),
+    )
+
+    character_version_id: Mapped[str] = mapped_column(ForeignKey("character_versions.id", ondelete="CASCADE"), primary_key=True)
+    source: Mapped[str] = mapped_column(String(24))
+    baseline_level: Mapped[int]
+    maximum_hp: Mapped[int]
+    current_hp: Mapped[int]
+    temporary_hp: Mapped[int] = mapped_column(default=0, server_default="0")
+    constitution_modifier: Mapped[int]
+    created_at: Mapped[datetime]
+    updated_at: Mapped[datetime]
+    completed_at: Mapped[datetime]
+    character_version: Mapped[CharacterVersionRow] = relationship(back_populates="hit_points")
+
+
+class CharacterImportReviewRow(Base):
+    __tablename__ = "character_import_reviews"
+    __table_args__ = (
+        CheckConstraint("revision >= 1", name="ck_character_import_review_revision"),
+        CheckConstraint("state IN ('pending', 'approved', 'changes_requested')", name="ck_character_import_review_state"),
+    )
+
+    character_version_id: Mapped[str] = mapped_column(ForeignKey("character_versions.id", ondelete="CASCADE"), primary_key=True)
+    revision: Mapped[int] = mapped_column(primary_key=True)
+    state: Mapped[str] = mapped_column(String(24))
+    submitted_at: Mapped[datetime]
+    reviewed_by_user_id: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), default=None)
+    reviewed_at: Mapped[datetime | None]
+    note: Mapped[str | None] = mapped_column(Text)
+    snapshot_json: Mapped[str] = mapped_column(Text)
+    snapshot_hash: Mapped[str] = mapped_column(String(64))
+    character_version: Mapped[CharacterVersionRow] = relationship(back_populates="import_reviews")
+    reviewer: Mapped[UserRow | None] = relationship()
 
 
 class AudioFileRow(Base):

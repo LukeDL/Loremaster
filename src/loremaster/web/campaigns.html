@@ -139,6 +139,24 @@
       </div>
     </dialog>
 
+    <dialog id="import-review-dialog" class="app-dialog">
+      <form id="import-review-form" class="modal-card">
+        <div class="modal-heading">
+          <div><div class="section-title">revisão do Mestre</div><h2 id="import-review-title">Reconstrução de personagem</h2></div>
+          <button class="icon-button" type="button" data-close-dialog aria-label="Fechar">×</button>
+        </div>
+        <div class="modal-body">
+          <div id="import-review-content" class="review-sheet"></div>
+          <label>Observação <textarea name="note" maxlength="1000" rows="3"></textarea></label>
+          <p id="import-review-error" class="auth-error" role="alert" hidden></p>
+        </div>
+        <div class="modal-actions">
+          <button id="request-import-changes" type="button">devolver para correção</button>
+          <button id="approve-import" class="primary" type="submit">aprovar snapshot</button>
+        </div>
+      </form>
+    </dialog>
+
     <script src="/auth-client.js"></script>
     <script src="/campaigns.js"></script>
   </body>

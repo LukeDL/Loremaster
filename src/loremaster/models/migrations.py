@@ -282,6 +282,56 @@ async def _add_srd_ability_scores(conn: AsyncConnection) -> None:
     )
 
 
+async def _add_character_classes_imports_and_hp(conn: AsyncConnection) -> None:
+    await _add_column(
+        conn,
+        "character_versions",
+        "creation_mode",
+        "VARCHAR(20) NOT NULL DEFAULT 'new_character' "
+        "CHECK (creation_mode IN ('new_character', 'manual_import'))",
+    )
+    statements = (
+        "CREATE TABLE IF NOT EXISTS character_creation_states ("
+        "character_version_id VARCHAR(36) PRIMARY KEY REFERENCES character_versions(id) ON DELETE CASCADE, "
+        "class_completed_at DATETIME, revision INTEGER NOT NULL DEFAULT 0 CHECK (revision >= 0), "
+        "created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL)",
+        "CREATE TABLE IF NOT EXISTS character_class_levels ("
+        "character_version_id VARCHAR(36) NOT NULL REFERENCES character_versions(id) ON DELETE CASCADE, "
+        "class_key VARCHAR(40) NOT NULL, levels INTEGER NOT NULL CHECK (levels BETWEEN 1 AND 20), "
+        "is_starting_class BOOLEAN NOT NULL DEFAULT 0, created_at DATETIME NOT NULL, "
+        "updated_at DATETIME NOT NULL, PRIMARY KEY (character_version_id, class_key))",
+        "CREATE UNIQUE INDEX IF NOT EXISTS uq_character_class_starting "
+        "ON character_class_levels(character_version_id) WHERE is_starting_class = 1",
+        "CREATE TABLE IF NOT EXISTS character_imported_ability_scores ("
+        "character_version_id VARCHAR(36) PRIMARY KEY REFERENCES character_versions(id) ON DELETE CASCADE, "
+        "strength INTEGER NOT NULL CHECK (strength BETWEEN 1 AND 30), "
+        "dexterity INTEGER NOT NULL CHECK (dexterity BETWEEN 1 AND 30), "
+        "constitution INTEGER NOT NULL CHECK (constitution BETWEEN 1 AND 30), "
+        "intelligence INTEGER NOT NULL CHECK (intelligence BETWEEN 1 AND 30), "
+        "wisdom INTEGER NOT NULL CHECK (wisdom BETWEEN 1 AND 30), "
+        "charisma INTEGER NOT NULL CHECK (charisma BETWEEN 1 AND 30), "
+        "attestation VARCHAR(500) NOT NULL, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL)",
+        "CREATE TABLE IF NOT EXISTS character_hit_points ("
+        "character_version_id VARCHAR(36) PRIMARY KEY REFERENCES character_versions(id) ON DELETE CASCADE, "
+        "source VARCHAR(24) NOT NULL CHECK (source IN ('level_one_formula','fixed_progression','manual_import')), "
+        "baseline_level INTEGER NOT NULL CHECK (baseline_level BETWEEN 1 AND 20), "
+        "maximum_hp INTEGER NOT NULL CHECK (maximum_hp BETWEEN 1 AND 1000000), "
+        "current_hp INTEGER NOT NULL CHECK (current_hp BETWEEN 0 AND maximum_hp), "
+        "temporary_hp INTEGER NOT NULL DEFAULT 0 CHECK (temporary_hp BETWEEN 0 AND 1000000), "
+        "constitution_modifier INTEGER NOT NULL, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL, "
+        "completed_at DATETIME NOT NULL)",
+        "CREATE TABLE IF NOT EXISTS character_import_reviews ("
+        "character_version_id VARCHAR(36) NOT NULL REFERENCES character_versions(id) ON DELETE CASCADE, "
+        "revision INTEGER NOT NULL CHECK (revision >= 1), "
+        "state VARCHAR(24) NOT NULL CHECK (state IN ('pending','approved','changes_requested')), "
+        "submitted_at DATETIME NOT NULL, reviewed_by_user_id VARCHAR(36) REFERENCES users(id) ON DELETE SET NULL, "
+        "reviewed_at DATETIME, note TEXT, snapshot_json TEXT NOT NULL, "
+        "snapshot_hash VARCHAR(64) NOT NULL, PRIMARY KEY (character_version_id, revision))",
+    )
+    for statement in statements:
+        await conn.execute(text(statement))
+
+
 MIGRATIONS = (
     Migration("001_add_loop_region_columns", _add_loop_region_columns),
     Migration("002_add_scene_entry", _add_scene_entry),
@@ -292,6 +342,7 @@ MIGRATIONS = (
     Migration("007_create_campaign_tables", _create_campaign_tables),
     Migration("008_add_campaign_lifecycle_and_characters", _add_campaign_lifecycle_and_characters),
     Migration("009_add_srd_ability_scores", _add_srd_ability_scores),
+    Migration("010_add_character_classes_imports_and_hp", _add_character_classes_imports_and_hp),
 )
 MIGRATION_VERSIONS = frozenset(migration.version for migration in MIGRATIONS)
 

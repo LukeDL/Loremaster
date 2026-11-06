@@ -150,9 +150,10 @@ antes de algumas sessões reais indicarem quais roteamentos são úteis.
 ## R3 — Personagens da party
 
 **Status:** autenticação e fundação de campanhas validadas pelo mestre no
-notebook real. O ciclo de campanha, identidades e versões independentes e a
-primeira etapa guiada de atributos estão implementados e aguardam validação no
-notebook. A linha operacional da R2.3 permanece separada.
+notebook real. O ciclo de campanha, identidades e versões independentes,
+atributos, classe, HP e reconstrução de personagens existentes estão
+implementados e aguardam validação no notebook. A linha operacional da R2.3
+permanece separada.
 
 Objetivo: permitir que cada jogador crie, evolua e use seu personagem no
 Loremaster, com progressão completa do nível 1 ao 20 segundo D&D 5e 2024. O
@@ -405,6 +406,53 @@ duplicações ou custos inválidos, outro jogador não acessa o rascunho e o mes
 vê apenas o progresso. Após concluir seis atributos válidos, o jogador pode
 ativar a versão; uma identidade reutilizada em outra campanha começa sem dados
 mecânicos copiados.
+
+### Incremento — classe, HP e reconstrução de personagem existente
+
+**Objetivo:** atender tanto personagens novos quanto campanhas já em andamento,
+sem rerrolar ou inventar o histórico mecânico de uma ficha existente.
+
+Decisões:
+
+- cada versão registra `new_character` ou `manual_import`; reutilizar uma
+  identidade não permite inferir o modo de entrada;
+- personagem novo escolhe uma classe do SRD 5.2.1. O HP de nível 1 usa o máximo
+  do Dado de Vida mais Constituição; quando a campanha começa acima do nível 1,
+  os níveis posteriores usam a progressão fixa do pacote;
+- reconstruções só podem nascer em campanhas `in_progress`, aceitam composição
+  multiclasse cuja soma corresponde ao nível total e preservam atributos e HP
+  atuais como baseline manual;
+- `current_hp = 0` é um estado válido. O sistema separa HP máximo, atual e
+  temporário e registra o modificador de Constituição do baseline;
+- o snapshot reconstruído passa por `draft` → `pending` → `approved` ou
+  `changes_requested`. Enquanto aguarda revisão, o jogador não altera os dados;
+  aprovação e devolução correspondem à revisão submetida;
+- o Mestre confere e aprova ou devolve com observação, mas não substitui as
+  escolhas do jogador;
+- níveis futuros poderão usar valor fixo, resultado de dado físico ou roller
+  autoritativo do servidor. O histórico anterior não será decomposto em
+  resultados fictícios.
+
+Implementado:
+
+- migração `010_add_character_classes_imports_and_hp`, preservando versões
+  existentes como `new_character` sem inventar classe ou HP;
+- catálogo público das 12 classes do SRD 5.2.1, composição multiclasse importada,
+  classe inicial e validação da soma de níveis;
+- cálculo autoritativo de HP para personagem novo e baseline manual auditável
+  para reconstruções;
+- APIs de jogador isoladas por propriedade, campanha selecionada e associação,
+  além de revisão exclusiva do Mestre;
+- escolha do modo de entrada no modal de personagem, criador dedicado para
+  classe, atributos e HP, e revisão da importação em modal no roster do Mestre;
+- regressões para regras de HP, multiclasse, `current_hp = 0`, bloqueio durante
+  revisão, correção e nova submissão, ativação após aprovação e migração.
+
+**Aceite:** em uma campanha em andamento, o jogador reconstrói um personagem de
+nível 7 como Guerreiro 5/Mago 2, transcreve atributos e HP sem rerrolar, envia um
+snapshot e fica impedido de alterá-lo até o Mestre aprovar ou devolver. Após a
+aprovação, pode ativar a versão. Em uma campanha nova, classe e Constituição
+produzem o HP correto sem o cliente informar um total arbitrário.
 
 **Aceite do primeiro MVP:** o mestre executa o bootstrap local, entra com usuário
 e senha, cria quatro contas de jogador, visualiza todas as fichas e opera a
