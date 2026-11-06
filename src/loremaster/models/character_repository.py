@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from loremaster.models.auth_repository import utcnow
+from loremaster.models.ability_score_repository import public_ability_progress
 from loremaster.models.character import (
     CampaignRosterMemberPublic,
     CampaignRosterPublic,
@@ -31,6 +32,7 @@ def _version_query():
     return select(CharacterVersionRow).options(
         selectinload(CharacterVersionRow.identity),
         selectinload(CharacterVersionRow.campaign).selectinload(CampaignRow.rule_pack),
+        selectinload(CharacterVersionRow.ability_scores),
     )
 
 
@@ -52,6 +54,7 @@ def public_version(row: CharacterVersionRow) -> CharacterVersionPublic:
         status=CharacterStatus(row.status),
         level=row.level,
         source_version_id=row.source_version_id,
+        ability_score_progress=public_ability_progress(row.ability_scores),
         created_at=row.created_at,
         updated_at=row.updated_at,
     )
@@ -238,6 +241,8 @@ async def set_owned_version_status(
     if target == CharacterStatus.ACTIVE:
         if current != CharacterStatus.DRAFT:
             raise ValueError("only draft characters can be activated")
+        if row.ability_scores is None or row.ability_scores.completed_at is None:
+            raise ValueError("complete ability scores before activating the character")
         existing = await sess.scalar(
             select(CharacterVersionRow.id).where(
                 CharacterVersionRow.campaign_id == row.campaign_id,

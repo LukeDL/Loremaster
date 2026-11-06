@@ -6,7 +6,7 @@ authors = [
     { name = "LukeDL", email = "lucas.dleite@hotmail.com" }
 ]
 license = "PolyForm-Noncommercial-1.0.0"
-license-files = ["LICENSE.md"]
+license-files = ["LICENSE.md", "THIRD_PARTY_NOTICES.md"]
 requires-python = ">=3.12"
 dependencies = [
     "aiosqlite>=0.22.1",

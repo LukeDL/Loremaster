@@ -27,13 +27,13 @@ def test_gm_creates_campaign_with_versioned_rules_and_members(client):
     assert packs.status_code == 200
     assert packs.json() == [
         {
-            "id": "dnd5e-2024-core-v1",
-            "key": "dnd5e-2024-core",
-            "name": "D&D 5e 2024 — Core",
+            "id": "dnd5e-2024-srd-5.2.1",
+            "key": "dnd5e-2024-srd",
+            "name": "D&D 5e 2024 — SRD",
             "system": "dnd5e",
             "edition": "2024",
-            "version": "1.0.0",
-            "license_name": "metadata-only",
+            "version": "5.2.1",
+            "license_name": "CC-BY-4.0",
         }
     ]
 
@@ -41,7 +41,7 @@ def test_gm_creates_campaign_with_versioned_rules_and_members(client):
         "/api/admin/campaigns",
         json={
             "name": " Return of the Setting Sun ",
-            "rule_pack_id": "dnd5e-2024-core-v1",
+            "rule_pack_id": "dnd5e-2024-srd-5.2.1",
             "max_characters_per_player": 4,
             "member_ids": [arthur["id"], merlin["id"]],
             "activate": True,
@@ -57,18 +57,18 @@ def test_gm_creates_campaign_with_versioned_rules_and_members(client):
     assert campaign["completed_at"] is None
     assert campaign["max_characters_per_player"] == 4
     assert [member["username"] for member in campaign["members"]] == ["arthur", "merlin"]
-    assert campaign["rule_pack"]["version"] == "1.0.0"
+    assert campaign["rule_pack"]["version"] == "5.2.1"
 
 
 def test_only_one_campaign_is_active_and_settings_are_editable(client):
     first = client.post(
         "/api/admin/campaigns",
-        json={"name": "First", "rule_pack_id": "dnd5e-2024-core-v1", "activate": False},
+        json={"name": "First", "rule_pack_id": "dnd5e-2024-srd-5.2.1", "activate": False},
     ).json()
     assert first["is_active"] is True
     second_response = client.post(
         "/api/admin/campaigns",
-        json={"name": "Second", "rule_pack_id": "dnd5e-2024-core-v1", "activate": True},
+        json={"name": "Second", "rule_pack_id": "dnd5e-2024-srd-5.2.1", "activate": True},
     )
     assert second_response.status_code == 201, second_response.text
     second = second_response.json()
@@ -85,7 +85,7 @@ def test_only_one_campaign_is_active_and_settings_are_editable(client):
     assert updated.status_code == 200
     assert updated.json()["name"] == "First revised"
     assert updated.json()["max_characters_per_player"] == 7
-    assert updated.json()["rule_pack"]["id"] == "dnd5e-2024-core-v1"
+    assert updated.json()["rule_pack"]["id"] == "dnd5e-2024-srd-5.2.1"
     campaigns = client.get("/api/admin/campaigns").json()
     assert [campaign["id"] for campaign in campaigns if campaign["is_active"]] == [first["id"]]
     assert second["id"] != first["id"]
@@ -96,7 +96,7 @@ def test_campaign_start_locks_entry_settings_without_changing_selection(client):
         "/api/admin/campaigns",
         json={
             "name": "Curse of Strahd",
-            "rule_pack_id": "dnd5e-2024-core-v1",
+            "rule_pack_id": "dnd5e-2024-srd-5.2.1",
             "starting_level": 3,
             "max_characters_per_player": 5,
         },
@@ -143,7 +143,7 @@ def test_campaign_start_locks_entry_settings_without_changing_selection(client):
 def test_campaign_cannot_complete_before_start(client):
     campaign = client.post(
         "/api/admin/campaigns",
-        json={"name": "Planning", "rule_pack_id": "dnd5e-2024-core-v1"},
+        json={"name": "Planning", "rule_pack_id": "dnd5e-2024-srd-5.2.1"},
     ).json()
     response = client.post(f"/api/admin/campaigns/{campaign['id']}/complete")
     assert response.status_code == 409
@@ -153,7 +153,7 @@ def test_membership_accepts_only_active_players(client):
     player = _create_player(client, "inactive-player")
     campaign = client.post(
         "/api/admin/campaigns",
-        json={"name": "Campaign", "rule_pack_id": "dnd5e-2024-core-v1"},
+        json={"name": "Campaign", "rule_pack_id": "dnd5e-2024-srd-5.2.1"},
     ).json()
     disabled = client.patch(
         f"/api/admin/users/{player['id']}",
@@ -195,7 +195,7 @@ def test_campaign_mutations_require_csrf(raw_client):
     ).status_code == 200
     response = raw_client.post(
         "/api/admin/campaigns",
-        json={"name": "Blocked", "rule_pack_id": "dnd5e-2024-core-v1"},
+        json={"name": "Blocked", "rule_pack_id": "dnd5e-2024-srd-5.2.1"},
     )
     assert response.status_code == 403
     assert response.json()["detail"] == "invalid csrf token"
@@ -206,7 +206,7 @@ def test_campaign_validation_rejects_invalid_limits_and_rule_packs(client):
         "/api/admin/campaigns",
         json={
             "name": "Invalid",
-            "rule_pack_id": "dnd5e-2024-core-v1",
+            "rule_pack_id": "dnd5e-2024-srd-5.2.1",
             "max_characters_per_player": 0,
         },
     )
@@ -221,7 +221,7 @@ def test_campaign_validation_rejects_invalid_limits_and_rule_packs(client):
         "/api/admin/campaigns",
         json={
             "name": "Invalid level",
-            "rule_pack_id": "dnd5e-2024-core-v1",
+            "rule_pack_id": "dnd5e-2024-srd-5.2.1",
             "starting_level": 21,
         },
     )
@@ -249,7 +249,7 @@ async def test_campaign_and_membership_survive_database_reopen(tmp_path):
         await create_campaign(
             sess,
             name="Persistent campaign",
-            rule_pack_id="dnd5e-2024-core-v1",
+            rule_pack_id="dnd5e-2024-srd-5.2.1",
             starting_level=4,
             max_characters_per_player=6,
             member_ids=[player.id],
@@ -272,6 +272,6 @@ async def test_campaign_and_membership_survive_database_reopen(tmp_path):
             assert [membership.user.username for membership in campaigns[0].memberships] == [
                 "persistent-player"
             ]
-            assert campaigns[0].rule_pack.version == "1.0.0"
+            assert campaigns[0].rule_pack.version == "5.2.1"
     finally:
         await reopened.close()

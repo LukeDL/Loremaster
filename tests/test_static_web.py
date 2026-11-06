@@ -193,6 +193,53 @@ def test_player_character_workflows_keep_bounded_forms_inside_dialogs(client):
     assert "alert(" not in script.text
 
 
+def test_character_creator_is_a_dedicated_player_page_with_local_assets(raw_client):
+    created = raw_client.post(
+        "/api/auth/login",
+        json={"username": "test-gm", "password": "test-password-123"},
+    )
+    assert created.status_code == 200
+    csrf = raw_client.cookies.get("loremaster_csrf")
+    raw_client.headers["X-CSRF-Token"] = csrf
+    player = raw_client.post(
+        "/api/admin/users",
+        json={
+            "username": "creator-player",
+            "password": "test-password-123",
+            "role": "player",
+        },
+    )
+    assert player.status_code == 201
+
+    gm_page = raw_client.get("/player/characters/example/creator", follow_redirects=False)
+    assert gm_page.status_code == 303
+    assert gm_page.headers["location"] == "/"
+
+    raw_client.cookies.clear()
+    raw_client.headers.pop("X-CSRF-Token", None)
+    anonymous = raw_client.get("/player/characters/example/creator", follow_redirects=False)
+    assert anonymous.status_code == 303
+    assert anonymous.headers["location"] == "/login"
+
+    login = raw_client.post(
+        "/api/auth/login",
+        json={"username": "creator-player", "password": "test-password-123"},
+    )
+    assert login.status_code == 200
+    _assert_local_page(raw_client, "/player/characters/example/creator")
+    response = raw_client.get("/player/characters/example/creator")
+    parser = StructureParser()
+    parser.feed(response.text)
+    assert parser.id_tags["ability-form"] == "form"
+    assert parser.id_tags["ability-grid"] == "div"
+    assert "ability-form" not in parser.ids_inside_dialog
+
+    script = raw_client.get("/character-creator.js")
+    assert script.status_code == 200
+    assert "prompt(" not in script.text
+    assert "alert(" not in script.text
+
+
 def test_login_static_ui_serves_only_local_assets(raw_client):
     _assert_local_page(raw_client, "/login")
 

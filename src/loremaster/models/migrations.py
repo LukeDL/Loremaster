@@ -246,6 +246,42 @@ async def _add_campaign_lifecycle_and_characters(conn: AsyncConnection) -> None:
     )
 
 
+async def _add_srd_ability_scores(conn: AsyncConnection) -> None:
+    await conn.execute(
+        text(
+            "INSERT OR IGNORE INTO rule_packs "
+            "(id, key, name, system, edition, version, license_name, created_at) VALUES "
+            "('dnd5e-2024-srd-5.2.1', 'dnd5e-2024-srd', 'D&D 5e 2024 — SRD', "
+            "'dnd5e', '2024', '5.2.1', 'CC-BY-4.0', CURRENT_TIMESTAMP)"
+        )
+    )
+    await conn.execute(
+        text(
+            "UPDATE campaigns SET rule_pack_id = 'dnd5e-2024-srd-5.2.1' "
+            "WHERE rule_pack_id = 'dnd5e-2024-core-v1'"
+        )
+    )
+    await conn.execute(text("DELETE FROM rule_packs WHERE id = 'dnd5e-2024-core-v1'"))
+    await conn.execute(
+        text(
+            "CREATE TABLE IF NOT EXISTS character_ability_scores ("
+            "character_version_id VARCHAR(36) PRIMARY KEY "
+            "REFERENCES character_versions(id) ON DELETE CASCADE, "
+            "method VARCHAR(20) NOT NULL "
+            "CHECK (method IN ('standard_array', 'point_buy')), "
+            "strength INTEGER CHECK (strength IS NULL OR strength BETWEEN 8 AND 15), "
+            "dexterity INTEGER CHECK (dexterity IS NULL OR dexterity BETWEEN 8 AND 15), "
+            "constitution INTEGER CHECK (constitution IS NULL OR constitution BETWEEN 8 AND 15), "
+            "intelligence INTEGER CHECK (intelligence IS NULL OR intelligence BETWEEN 8 AND 15), "
+            "wisdom INTEGER CHECK (wisdom IS NULL OR wisdom BETWEEN 8 AND 15), "
+            "charisma INTEGER CHECK (charisma IS NULL OR charisma BETWEEN 8 AND 15), "
+            "created_at DATETIME NOT NULL, "
+            "updated_at DATETIME NOT NULL, "
+            "completed_at DATETIME)"
+        )
+    )
+
+
 MIGRATIONS = (
     Migration("001_add_loop_region_columns", _add_loop_region_columns),
     Migration("002_add_scene_entry", _add_scene_entry),
@@ -255,6 +291,7 @@ MIGRATIONS = (
     Migration("006_create_auth_tables", _create_auth_tables),
     Migration("007_create_campaign_tables", _create_campaign_tables),
     Migration("008_add_campaign_lifecycle_and_characters", _add_campaign_lifecycle_and_characters),
+    Migration("009_add_srd_ability_scores", _add_srd_ability_scores),
 )
 MIGRATION_VERSIONS = frozenset(migration.version for migration in MIGRATIONS)
 

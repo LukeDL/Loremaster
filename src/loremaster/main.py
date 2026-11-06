@@ -124,6 +124,15 @@ def create_app(lifespan_context=lifespan) -> FastAPI:
                 return RedirectResponse("/", status_code=303)
             return FileResponse(web_dir / "player.html")
 
+        @app.get("/player/characters/{version_id}/creator", include_in_schema=False)
+        async def character_creator_page(request: Request, version_id: str):
+            context = await get_auth_context(request)
+            if context is None:
+                return RedirectResponse("/login", status_code=303)
+            if context.user.role == "gm":
+                return RedirectResponse("/", status_code=303)
+            return FileResponse(web_dir / "character-creator.html")
+
         @app.get("/", include_in_schema=False)
         @app.get("/index.html", include_in_schema=False)
         async def index_page(request: Request):

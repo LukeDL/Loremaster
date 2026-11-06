@@ -103,6 +103,7 @@ async def test_fresh_database_records_all_migrations_and_enables_foreign_keys(tm
         "campaign_members",
         "character_identities",
         "character_versions",
+        "character_ability_scores",
     } <= tables
 
 
@@ -134,7 +135,8 @@ async def test_legacy_database_is_backed_up_and_migrated_without_data_loss(tmp_p
             for row in connection.execute(
                 "SELECT name FROM sqlite_master WHERE type='table' "
                 "AND name IN ('users', 'sessions', 'rule_packs', 'campaigns', "
-                "'campaign_members', 'character_identities', 'character_versions')"
+                "'campaign_members', 'character_identities', 'character_versions', "
+                "'character_ability_scores')"
             )
         }
         campaign_columns = {
@@ -162,9 +164,10 @@ async def test_legacy_database_is_backed_up_and_migrated_without_data_loss(tmp_p
         "campaign_members",
         "character_identities",
         "character_versions",
+        "character_ability_scores",
     }
     assert {"starting_level", "lifecycle", "started_at", "completed_at"} <= campaign_columns
-    assert rule_pack == ("dnd5e-2024-core-v1", "2024", "1.0.0", "metadata-only")
+    assert rule_pack == ("dnd5e-2024-srd-5.2.1", "2024", "5.2.1", "CC-BY-4.0")
     backups = list((tmp_path / "backups").glob("legacy-pre-migration-*.db"))
     assert len(backups) == 1
     with sqlite3.connect(backups[0]) as backup:

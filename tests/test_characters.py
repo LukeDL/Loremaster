@@ -27,7 +27,7 @@ def _create_campaign(client, name: str, member_ids: list[str], *, level: int = 1
         "/api/admin/campaigns",
         json={
             "name": name,
-            "rule_pack_id": "dnd5e-2024-core-v1",
+            "rule_pack_id": "dnd5e-2024-srd-5.2.1",
             "starting_level": level,
             "max_characters_per_player": limit,
             "member_ids": member_ids,
@@ -36,6 +36,29 @@ def _create_campaign(client, name: str, member_ids: list[str], *, level: int = 1
     )
     assert response.status_code == 201, response.text
     return response.json()
+
+
+def _complete_standard_array(client, version_id: str) -> dict:
+    saved = client.put(
+        f"/api/player/characters/{version_id}/creator/ability-scores",
+        json={
+            "method": "standard_array",
+            "scores": {
+                "strength": 15,
+                "dexterity": 14,
+                "constitution": 13,
+                "intelligence": 12,
+                "wisdom": 10,
+                "charisma": 8,
+            },
+        },
+    )
+    assert saved.status_code == 200, saved.text
+    completed = client.post(
+        f"/api/player/characters/{version_id}/creator/ability-scores/complete"
+    )
+    assert completed.status_code == 200, completed.text
+    return completed.json()
 
 
 def test_player_creates_versions_at_campaign_level_and_only_one_can_be_active(raw_client):
@@ -54,7 +77,12 @@ def test_player_creates_versions_at_campaign_level_and_only_one_can_be_active(ra
     assert arthur["identity"]["name"] == "Arthur"
     assert arthur["level"] == 3
     assert arthur["status"] == "draft"
+    assert arthur["ability_score_progress"]["status"] == "not_started"
 
+    premature = raw_client.post(f"/api/player/characters/{arthur['id']}/activate")
+    assert premature.status_code == 409
+    assert premature.json()["detail"] == "complete ability scores before activating the character"
+    _complete_standard_array(raw_client, arthur["id"])
     activated = raw_client.post(f"/api/player/characters/{arthur['id']}/activate")
     assert activated.status_code == 200
     assert activated.json()["status"] == "active"
@@ -62,6 +90,7 @@ def test_player_creates_versions_at_campaign_level_and_only_one_can_be_active(ra
     merlin = raw_client.post("/api/player/characters", json={"name": "Merlin"})
     assert merlin.status_code == 201
     merlin = merlin.json()
+    _complete_standard_array(raw_client, merlin["id"])
     conflict = raw_client.post(f"/api/player/characters/{merlin['id']}/activate")
     assert conflict.status_code == 409
 
@@ -161,6 +190,7 @@ def test_gm_marks_character_dead_and_can_restore_it_to_draft(raw_client):
     _create_campaign(raw_client, "Return", [player["id"]])
     _login(raw_client, "joao", "player-password-123")
     arthur = raw_client.post("/api/player/characters", json={"name": "Arthur"}).json()
+    _complete_standard_array(raw_client, arthur["id"])
     raw_client.post(f"/api/player/characters/{arthur['id']}/activate")
 
     _login(raw_client, "test-gm", "test-password-123")
@@ -236,13 +266,176 @@ def test_campaign_limit_cannot_be_lowered_below_existing_versions(raw_client):
     assert response.json()["detail"] == "campaign character limit is below the existing roster"
 
 
+def test_ability_creator_persists_partial_progress_and_completes_point_buy(raw_client):
+    _login(raw_client, "test-gm", "test-password-123")
+    player = _create_player(raw_client, "joao")
+    campaign = _create_campaign(raw_client, "Return", [player["id"]])
+    _login(raw_client, "joao", "player-password-123")
+    arthur = raw_client.post("/api/player/characters", json={"name": "Arthur"}).json()
+    endpoint = f"/api/player/characters/{arthur['id']}/creator/ability-scores"
+
+    initial = raw_client.get(endpoint)
+    assert initial.status_code == 200
+    assert initial.json()["status"] == "not_started"
+    assert initial.json()["assigned_count"] == 0
+
+    partial_payload = {
+        "method": "point_buy",
+        "scores": {
+            "strength": 15,
+            "dexterity": 15,
+            "constitution": 15,
+            "intelligence": None,
+            "wisdom": None,
+            "charisma": None,
+        },
+    }
+    saved = raw_client.put(endpoint, json=partial_payload)
+    assert saved.status_code == 200, saved.text
+    assert saved.json()["status"] == "in_progress"
+    assert saved.json()["assigned_count"] == 3
+    assert saved.json()["points_spent"] == 27
+    assert saved.json()["points_remaining"] == 0
+    assert saved.json()["modifiers"]["strength"] == 2
+
+    _login(raw_client, "joao", "player-password-123")
+    resumed = raw_client.get(endpoint)
+    assert resumed.status_code == 200
+    assert resumed.json()["scores"] == partial_payload["scores"]
+
+    overspent = raw_client.put(
+        endpoint,
+        json={
+            "method": "point_buy",
+            "scores": {**partial_payload["scores"], "intelligence": 9},
+        },
+    )
+    assert overspent.status_code == 422
+    assert raw_client.get(endpoint).json()["scores"] == partial_payload["scores"]
+
+    complete_payload = {
+        "method": "point_buy",
+        "scores": {
+            "strength": 14,
+            "dexterity": 14,
+            "constitution": 13,
+            "intelligence": 12,
+            "wisdom": 10,
+            "charisma": 8,
+        },
+    }
+    assert raw_client.put(endpoint, json=complete_payload).status_code == 200
+    completed = raw_client.post(f"{endpoint}/complete")
+    assert completed.status_code == 200, completed.text
+    assert completed.json()["status"] == "complete"
+    assert completed.json()["points_spent"] == 25
+    assert completed.json()["points_remaining"] == 2
+
+    _login(raw_client, "test-gm", "test-password-123")
+    roster = raw_client.get(f"/api/admin/campaigns/{campaign['id']}/roster").json()
+    progress = roster["members"][0]["characters"][0]["ability_score_progress"]
+    assert progress["status"] == "complete"
+    assert progress["method"] == "point_buy"
+
+
+def test_ability_creator_isolated_by_owner_selected_campaign_and_membership(raw_client):
+    _login(raw_client, "test-gm", "test-password-123")
+    joao = _create_player(raw_client, "joao")
+    maria = _create_player(raw_client, "maria")
+    campaign = _create_campaign(raw_client, "Return", [joao["id"], maria["id"]])
+
+    _login(raw_client, "joao", "player-password-123")
+    arthur = raw_client.post("/api/player/characters", json={"name": "Arthur"}).json()
+    endpoint = f"/api/player/characters/{arthur['id']}/creator/ability-scores"
+    partial = {
+        "method": "standard_array",
+        "scores": {
+            "strength": 15,
+            "dexterity": None,
+            "constitution": None,
+            "intelligence": None,
+            "wisdom": None,
+            "charisma": None,
+        },
+    }
+    assert raw_client.put(endpoint, json=partial).status_code == 200
+
+    _login(raw_client, "maria", "player-password-123")
+    assert raw_client.get(endpoint).status_code == 404
+    assert raw_client.put(endpoint, json=partial).status_code == 404
+    assert raw_client.post(f"{endpoint}/complete").status_code == 404
+
+    _login(raw_client, "test-gm", "test-password-123")
+    assert raw_client.put(
+        f"/api/admin/campaigns/{campaign['id']}/members",
+        json={"member_ids": [maria["id"]]},
+    ).status_code == 200
+
+    _login(raw_client, "joao", "player-password-123")
+    assert raw_client.get(endpoint).status_code == 404
+
+    _login(raw_client, "test-gm", "test-password-123")
+    assert raw_client.put(
+        f"/api/admin/campaigns/{campaign['id']}/members",
+        json={"member_ids": [joao["id"], maria["id"]]},
+    ).status_code == 200
+    _login(raw_client, "joao", "player-password-123")
+    restored = raw_client.get(endpoint)
+    assert restored.status_code == 200
+    assert restored.json()["scores"]["strength"] == 15
+
+
+def test_reused_identity_starts_with_independent_ability_progress(raw_client):
+    _login(raw_client, "test-gm", "test-password-123")
+    player = _create_player(raw_client, "joao")
+    _create_campaign(raw_client, "First", [player["id"]])
+    _login(raw_client, "joao", "player-password-123")
+    original = raw_client.post("/api/player/characters", json={"name": "Arthur"}).json()
+    _complete_standard_array(raw_client, original["id"])
+
+    _login(raw_client, "test-gm", "test-password-123")
+    _create_campaign(raw_client, "Second", [player["id"]])
+    _login(raw_client, "joao", "player-password-123")
+    reused = raw_client.post(
+        "/api/player/characters",
+        json={"identity_id": original["identity"]["id"]},
+    ).json()
+    assert reused["ability_score_progress"]["status"] == "not_started"
+    creator = raw_client.get(
+        f"/api/player/characters/{reused['id']}/creator/ability-scores"
+    ).json()
+    assert creator["scores"] == {
+        "strength": None,
+        "dexterity": None,
+        "constitution": None,
+        "intelligence": None,
+        "wisdom": None,
+        "charisma": None,
+    }
+
+
 def test_character_mutations_require_csrf(raw_client):
     _login(raw_client, "test-gm", "test-password-123")
     player = _create_player(raw_client, "joao")
     _create_campaign(raw_client, "Return", [player["id"]])
     _login(raw_client, "joao", "player-password-123")
+    arthur = raw_client.post("/api/player/characters", json={"name": "Arthur"}).json()
     raw_client.headers.pop("X-CSRF-Token", None)
 
-    response = raw_client.post("/api/player/characters", json={"name": "Arthur"})
+    response = raw_client.post("/api/player/characters", json={"name": "Merlin"})
     assert response.status_code == 403
     assert response.json()["detail"] == "invalid csrf token"
+    endpoint = f"/api/player/characters/{arthur['id']}/creator/ability-scores"
+    payload = {
+        "method": "standard_array",
+        "scores": {
+            "strength": 15,
+            "dexterity": None,
+            "constitution": None,
+            "intelligence": None,
+            "wisdom": None,
+            "charisma": None,
+        },
+    }
+    assert raw_client.put(endpoint, json=payload).status_code == 403
+    assert raw_client.post(f"{endpoint}/complete").status_code == 403
