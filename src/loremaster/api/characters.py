@@ -26,6 +26,26 @@ from loremaster.models.character import (
     CreateCharacterRequest,
     RenameCharacterIdentityRequest,
 )
+from loremaster.models.character_creation import (
+    CLASS_CATALOG,
+    CharacterClassDefinition,
+    CharacterClassesPublic,
+    CharacterImportPublic,
+    CreationMode,
+    ImportReviewRequest,
+    SUPPORTED_CHARACTER_RULE_PACKS,
+    SaveCharacterClassesRequest,
+    SaveCharacterImportRequest,
+)
+from loremaster.models.character_creation_repository import (
+    public_class_progress,
+    public_import,
+    refresh_new_character_hp,
+    review_import,
+    save_classes,
+    save_import,
+    submit_import,
+)
 from loremaster.models.character_repository import (
     create_campaign_version,
     get_owned_identity,
@@ -83,10 +103,25 @@ async def _owned_version_in_selected_campaign(
 def _require_ability_creator_available(row) -> None:
     if row.status != CharacterStatus.DRAFT.value:
         raise HTTPException(status.HTTP_409_CONFLICT, "only draft characters can be edited")
+    if row.creation_mode != CreationMode.NEW_CHARACTER.value:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "guided ability scores are unavailable for imported characters",
+        )
     if row.campaign.rule_pack_id not in SUPPORTED_ABILITY_RULE_PACKS:
         raise HTTPException(
             status.HTTP_409_CONFLICT,
             "ability-score rules are unavailable for this rule pack",
+        )
+
+
+def _require_character_creator_available(row) -> None:
+    if row.status != CharacterStatus.DRAFT.value:
+        raise HTTPException(status.HTTP_409_CONFLICT, "only draft characters can be edited")
+    if row.campaign.rule_pack_id not in SUPPORTED_CHARACTER_RULE_PACKS:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "character-creation rules are unavailable for this rule pack",
         )
 
 
@@ -109,6 +144,14 @@ async def player_characters(
     campaign = await _selected_campaign_or_404(sess, context.user.id)
     rows = await list_player_versions(sess, context.user.id, campaign.id)
     return [public_version(row) for row in rows]
+
+
+@player_router.get("/rule-options/classes", response_model=list[CharacterClassDefinition])
+async def class_options(
+    context: AuthContext = Depends(require_authenticated),
+) -> list[CharacterClassDefinition]:
+    _require_player(context)
+    return list(CLASS_CATALOG.values())
 
 
 @player_router.get("/character-identities", response_model=list[CharacterIdentityPublic])
@@ -139,6 +182,8 @@ async def create_character(
             campaign=campaign,
             name=payload.name,
             identity_id=payload.identity_id,
+            creation_mode=payload.creation_mode,
+            level=payload.level,
         )
     except LookupError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
@@ -177,6 +222,104 @@ async def _player_status_change(
     except ValueError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
     return public_version(row)
+
+
+@player_router.get(
+    "/characters/{version_id}/creator/classes",
+    response_model=CharacterClassesPublic,
+)
+async def character_classes(
+    version_id: str,
+    context: AuthContext = Depends(require_authenticated),
+    sess: AsyncSession = Depends(db_session),
+) -> CharacterClassesPublic:
+    row = await _owned_version_in_selected_campaign(sess, context, version_id)
+    if row.campaign.rule_pack_id not in SUPPORTED_CHARACTER_RULE_PACKS:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "character-creation rules are unavailable for this rule pack",
+        )
+    return public_class_progress(row)
+
+
+@player_router.put(
+    "/characters/{version_id}/creator/classes",
+    response_model=CharacterClassesPublic,
+)
+async def save_character_classes(
+    version_id: str,
+    payload: SaveCharacterClassesRequest,
+    context: AuthContext = Depends(require_authenticated),
+    sess: AsyncSession = Depends(db_session),
+) -> CharacterClassesPublic:
+    row = await _owned_version_in_selected_campaign(sess, context, version_id)
+    _require_character_creator_available(row)
+    try:
+        await save_classes(sess, row, payload)
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
+    refreshed = await get_owned_version(sess, version_id, context.user.id)
+    assert refreshed is not None
+    await refresh_new_character_hp(sess, refreshed)
+    refreshed = await get_owned_version(sess, version_id, context.user.id)
+    assert refreshed is not None
+    return public_class_progress(refreshed)
+
+
+@player_router.get(
+    "/characters/{version_id}/creator/import",
+    response_model=CharacterImportPublic,
+)
+async def character_import(
+    version_id: str,
+    context: AuthContext = Depends(require_authenticated),
+    sess: AsyncSession = Depends(db_session),
+) -> CharacterImportPublic:
+    row = await _owned_version_in_selected_campaign(sess, context, version_id)
+    if row.creation_mode != "manual_import":
+        raise HTTPException(status.HTTP_409_CONFLICT, "character is not a manual import")
+    return public_import(row)
+
+
+@player_router.put(
+    "/characters/{version_id}/creator/import",
+    response_model=CharacterImportPublic,
+)
+async def save_character_import(
+    version_id: str,
+    payload: SaveCharacterImportRequest,
+    context: AuthContext = Depends(require_authenticated),
+    sess: AsyncSession = Depends(db_session),
+) -> CharacterImportPublic:
+    row = await _owned_version_in_selected_campaign(sess, context, version_id)
+    _require_character_creator_available(row)
+    try:
+        await save_import(sess, row, payload)
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
+    refreshed = await get_owned_version(sess, version_id, context.user.id)
+    assert refreshed is not None
+    return public_import(refreshed)
+
+
+@player_router.post(
+    "/characters/{version_id}/creator/import/submit",
+    response_model=CharacterImportPublic,
+)
+async def submit_character_import(
+    version_id: str,
+    context: AuthContext = Depends(require_authenticated),
+    sess: AsyncSession = Depends(db_session),
+) -> CharacterImportPublic:
+    row = await _owned_version_in_selected_campaign(sess, context, version_id)
+    _require_character_creator_available(row)
+    try:
+        await submit_import(sess, row)
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    refreshed = await get_owned_version(sess, version_id, context.user.id)
+    assert refreshed is not None
+    return public_import(refreshed)
 
 
 @player_router.get(
@@ -232,6 +375,9 @@ async def complete_character_ability_scores(
         ability_row = await complete_ability_scores(sess, row)
     except ValueError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    refreshed = await get_owned_version(sess, row.id, context.user.id)
+    assert refreshed is not None
+    await refresh_new_character_hp(sess, refreshed)
     return public_ability_scores(ability_row, row.id)
 
 
@@ -266,6 +412,46 @@ async def _gm_status_change(
     except ValueError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
     return public_version(row)
+
+
+@admin_router.get("/{version_id}/import", response_model=CharacterImportPublic)
+async def gm_character_import(
+    version_id: str,
+    sess: AsyncSession = Depends(db_session),
+) -> CharacterImportPublic:
+    row = await get_version(sess, version_id)
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "character version not found")
+    if row.creation_mode != "manual_import":
+        raise HTTPException(status.HTTP_409_CONFLICT, "character is not a manual import")
+    return public_import(row)
+
+
+@admin_router.post("/{version_id}/import/review", response_model=CharacterImportPublic)
+async def gm_review_character_import(
+    version_id: str,
+    payload: ImportReviewRequest,
+    context: AuthContext = Depends(require_gm),
+    sess: AsyncSession = Depends(db_session),
+) -> CharacterImportPublic:
+    row = await get_version(sess, version_id)
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "character version not found")
+    try:
+        await review_import(
+            sess,
+            row,
+            reviewer_user_id=context.user.id,
+            decision=payload.decision,
+            note=payload.note,
+            expected_revision=payload.expected_revision,
+            expected_snapshot_hash=payload.expected_snapshot_hash,
+        )
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    refreshed = await get_version(sess, version_id)
+    assert refreshed is not None
+    return public_import(refreshed)
 
 
 @admin_router.post("/{version_id}/mark-dead", response_model=CharacterVersionPublic)

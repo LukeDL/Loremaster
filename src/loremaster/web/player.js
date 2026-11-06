@@ -8,6 +8,9 @@
   const createError = document.querySelector("#create-character-error");
   const newNameLabel = document.querySelector("#new-character-name");
   const existingPicker = document.querySelector("#existing-character-picker");
+  const manualImportOption = document.querySelector("#manual-import-option");
+  const importLevelField = document.querySelector("#import-level-field");
+  const entryModeHelp = document.querySelector("#entry-mode-help");
   const identitySelect = createForm.elements.identity_id;
   const renameDialog = document.querySelector("#rename-character-dialog");
   const renameForm = document.querySelector("#rename-character");
@@ -27,6 +30,7 @@
   const lifecycleLabels = { planning: "planejamento", in_progress: "em andamento", completed: "concluída" };
   const statusLabels = { draft: "rascunho", active: "ativo", dead: "morto", retired: "retirado" };
   const creationLabels = { not_started: "não iniciados", in_progress: "em andamento", complete: "concluídos" };
+  const reviewLabels = { draft: "rascunho", pending: "aguardando Mestre", approved: "aprovada", changes_requested: "correção solicitada", not_required: "não necessária" };
 
   function showDialog(dialog) {
     if (typeof dialog.showModal === "function") dialog.showModal();
@@ -61,6 +65,15 @@
     existingPicker.hidden = isNew;
     createForm.elements.name.required = isNew;
     identitySelect.required = !isNew;
+  }
+
+  function setEntryModeFields() {
+    const isImport = createForm.elements.creation_mode.value === "manual_import";
+    importLevelField.hidden = !isImport;
+    createForm.elements.level.required = isImport;
+    entryModeHelp.textContent = isImport
+      ? "A reconstrução preserva os valores da ficha atual e exige revisão do Mestre antes da ativação."
+      : "A versão nasce no nível inicial da campanha e terá progressão independente.";
   }
 
   function openRename(character) {
@@ -121,22 +134,29 @@
       const creation = document.createElement("div");
       creation.className = "campaign-stat";
       const creationLabel = document.createElement("span");
-      creationLabel.textContent = "Atributos";
+      creationLabel.textContent = character.creation_mode === "manual_import" ? "Importação" : "Criação";
       const creationValue = document.createElement("strong");
-      creationValue.textContent = creationLabels[character.ability_score_progress.status];
+      creationValue.textContent = character.creation_mode === "manual_import"
+        ? reviewLabels[character.import_review_state]
+        : `classe ${creationLabels[character.class_progress.status]} · atributos ${creationLabels[character.ability_score_progress.status]}`;
       creation.append(creationLabel, creationValue);
       summary.append(level, rules, creation);
       const actions = document.createElement("div");
       actions.className = "actions";
       actions.append(button("renomear identidade", () => openRename(character)));
       if (character.status === "draft") {
-        const creatorLabel = character.ability_score_progress.status === "not_started"
-          ? "começar atributos"
-          : character.ability_score_progress.status === "complete" ? "revisar atributos" : "continuar criação";
+        const ready = character.creation_mode === "manual_import"
+          ? character.import_review_state === "approved"
+          : character.class_progress.status === "complete"
+            && character.ability_score_progress.status === "complete"
+            && character.hit_point_progress.status === "complete";
+        const creatorLabel = character.creation_mode === "manual_import"
+          ? character.import_review_state === "draft" ? "preencher reconstrução" : "revisar reconstrução"
+          : character.class_progress.status === "not_started" ? "começar criação" : "continuar criação";
         actions.append(button(creatorLabel, () => {
           window.location.assign(`/player/characters/${encodeURIComponent(character.id)}/creator`);
-        }, character.ability_score_progress.status === "complete" ? "" : "primary"));
-        if (character.ability_score_progress.status === "complete") {
+        }, ready ? "" : "primary"));
+        if (ready) {
           actions.append(button("ativar", () => openStatus(character, "activate"), "primary"));
         }
       }
@@ -188,11 +208,16 @@
     }
     const existingRadio = createForm.querySelector('input[value="existing"]');
     existingRadio.disabled = !identitySelect.options.length;
+    const importRadio = createForm.querySelector('input[value="manual_import"]');
+    importRadio.disabled = campaign.lifecycle !== "in_progress";
+    manualImportOption.classList.toggle("disabled", importRadio.disabled);
     setSourceFields();
+    setEntryModeFields();
     showDialog(createDialog);
   });
 
   for (const radio of createForm.elements.source) radio.addEventListener("change", setSourceFields);
+  for (const radio of createForm.elements.creation_mode) radio.addEventListener("change", setEntryModeFields);
   for (const dialog of [createDialog, renameDialog, statusDialog]) {
     dialog.addEventListener("click", (event) => {
       if (event.target === dialog) closeDialog(dialog);
@@ -209,15 +234,16 @@
     const payload = data.get("source") === "new"
       ? { name: data.get("name") }
       : { identity_id: data.get("identity_id") };
+    payload.creation_mode = data.get("creation_mode");
+    if (payload.creation_mode === "manual_import") payload.level = Number(data.get("level"));
     const response = await fetch("/api/player/characters", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
     if (!response.ok) {
-      createError.textContent = response.status === 409
-        ? "O limite da campanha foi atingido ou essa identidade já participa dela."
-        : "Não foi possível criar o personagem.";
+      const body = await response.json().catch(() => ({}));
+      createError.textContent = body.detail || "Não foi possível criar o personagem.";
       createError.hidden = false;
       return;
     }

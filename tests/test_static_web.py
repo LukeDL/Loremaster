@@ -141,18 +141,24 @@ def test_campaign_administration_keeps_bounded_forms_inside_dialogs(client):
     assert parser.id_tags["settings-dialog"] == "dialog"
     assert parser.id_tags["lifecycle-dialog"] == "dialog"
     assert parser.id_tags["roster-dialog"] == "dialog"
+    assert parser.id_tags["import-review-dialog"] == "dialog"
     assert {
         "create-campaign",
         "members-form",
         "settings-form",
         "lifecycle-form",
         "roster-list",
+        "import-review-form",
+        "import-review-content",
     } <= parser.ids_inside_dialog
 
     script = client.get("/campaigns.js")
     assert script.status_code == 200
     assert "prompt(" not in script.text
     assert "alert(" not in script.text
+    assert "requestId !== reviewRequest" in script.text
+    assert "expected_revision: reviewSnapshot.revision" in script.text
+    assert "expected_snapshot_hash: reviewSnapshot.hash" in script.text
 
 
 def test_player_character_workflows_keep_bounded_forms_inside_dialogs(client):
@@ -186,6 +192,8 @@ def test_player_character_workflows_keep_bounded_forms_inside_dialogs(client):
         "rename-character",
         "character-status-form",
     } <= parser.ids_inside_dialog
+    assert "manual-import-option" in parser.ids_inside_dialog
+    assert "import-level-field" in parser.ids_inside_dialog
 
     script = client.get("/player.js")
     assert script.status_code == 200
@@ -232,7 +240,13 @@ def test_character_creator_is_a_dedicated_player_page_with_local_assets(raw_clie
     parser.feed(response.text)
     assert parser.id_tags["ability-form"] == "form"
     assert parser.id_tags["ability-grid"] == "div"
+    assert parser.id_tags["class-form"] == "form"
+    assert parser.id_tags["class-list"] == "div"
+    assert parser.id_tags["import-form"] == "form"
+    assert parser.id_tags["import-ability-grid"] == "div"
     assert "ability-form" not in parser.ids_inside_dialog
+    assert "class-form" not in parser.ids_inside_dialog
+    assert "import-form" not in parser.ids_inside_dialog
     assert response.text.index("<strong>Classe</strong>") < response.text.index("<strong>Origem</strong>")
     assert response.text.index("<strong>Origem</strong>") < response.text.index("<strong>Atributos</strong>")
     assert response.text.index("<strong>Atributos</strong>") < response.text.index("<strong>Alinhamento</strong>")
@@ -247,6 +261,12 @@ def test_character_creator_is_a_dedicated_player_page_with_local_assets(raw_clie
     assert 'controls.className = "score-stepper"' in script.text
     assert 'decrease.textContent = "−"' in script.text
     assert 'increase.textContent = "+"' in script.text
+    assert "const classEndpoint" in script.text
+    assert "const importEndpoint" in script.text
+    assert "Snapshot enviado ao Mestre para revisão" in script.text
+    assert "lockClassEditor(locked)" in script.text
+    assert "submitImport.disabled = locked;" in script.text
+    assert "submitImport.disabled = locked ||" not in script.text
 
 
 def test_login_static_ui_serves_only_local_assets(raw_client):

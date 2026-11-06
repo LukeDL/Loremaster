@@ -34,6 +34,17 @@
           <button class="icon-button" type="button" data-close-dialog aria-label="Fechar">×</button>
         </div>
         <div class="modal-body form-stack">
+          <fieldset>
+            <legend>Como este personagem entra na campanha?</legend>
+            <label class="method-option compact-option">
+              <input type="radio" name="creation_mode" value="new_character" checked />
+              <span><strong>Criar personagem novo</strong><small>Começa no nível inicial da campanha e segue o criador guiado.</small></span>
+            </label>
+            <label id="manual-import-option" class="method-option compact-option">
+              <input type="radio" name="creation_mode" value="manual_import" />
+              <span><strong>Reconstruir personagem existente</strong><small>Transcreva nível, classes, atributos e HP atuais sem rerrolar o histórico.</small></span>
+            </label>
+          </fieldset>
           <label class="checkbox"><input type="radio" name="source" value="new" checked /> criar uma nova identidade</label>
           <label class="checkbox"><input type="radio" name="source" value="existing" /> reutilizar personagem de outra campanha</label>
           <label id="new-character-name">Nome <input name="name" maxlength="200" /></label>
@@ -41,7 +52,8 @@
             Personagem existente
             <select name="identity_id"></select>
           </label>
-          <p class="meta">A versão nasce no nível inicial da campanha e terá progressão independente. O criador mecânico guiado será adicionado em uma próxima etapa.</p>
+          <label id="import-level-field" hidden>Nível atual <input name="level" type="number" min="1" max="20" value="1" /></label>
+          <p id="entry-mode-help" class="meta">A versão nasce no nível inicial da campanha e terá progressão independente.</p>
           <p id="create-character-error" class="auth-error" role="alert" hidden></p>
         </div>
         <div class="modal-actions">

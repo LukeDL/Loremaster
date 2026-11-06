@@ -23,10 +23,19 @@
   const rosterDialog = document.querySelector("#roster-dialog");
   const rosterTitle = document.querySelector("#roster-dialog-title");
   const rosterList = document.querySelector("#roster-list");
+  const importReviewDialog = document.querySelector("#import-review-dialog");
+  const importReviewForm = document.querySelector("#import-review-form");
+  const importReviewTitle = document.querySelector("#import-review-title");
+  const importReviewContent = document.querySelector("#import-review-content");
+  const importReviewError = document.querySelector("#import-review-error");
+  const requestImportChanges = document.querySelector("#request-import-changes");
   const openCreateButton = document.querySelector("#open-create-campaign");
   let players = [];
   let currentCampaign = null;
   let lifecycleAction = null;
+  let reviewCharacter = null;
+  let reviewRequest = 0;
+  let reviewSnapshot = null;
 
   const lifecycleLabels = {
     planning: "planejamento",
@@ -35,6 +44,7 @@
   };
   const statusLabels = { draft: "rascunho", active: "ativo", dead: "morto", retired: "retirado" };
   const creationLabels = { not_started: "não iniciados", in_progress: "em andamento", complete: "concluídos" };
+  const reviewLabels = { draft: "rascunho", pending: "aguardando revisão", approved: "aprovada", changes_requested: "correção solicitada" };
 
   async function request(url, options = {}) {
     const response = await fetch(url, options);
@@ -133,7 +143,88 @@
     showDialog(lifecycleDialog);
   }
 
+  function reviewFact(label, value) {
+    const row = document.createElement("div");
+    const term = document.createElement("dt");
+    term.textContent = label;
+    const detail = document.createElement("dd");
+    detail.textContent = value;
+    row.append(term, detail);
+    return row;
+  }
+
+  async function openImportReview(character) {
+    const requestId = ++reviewRequest;
+    reviewCharacter = character;
+    reviewSnapshot = null;
+    importReviewError.hidden = true;
+    importReviewForm.reset();
+    importReviewTitle.textContent = `${character.identity.name} · nível ${character.level}`;
+    importReviewContent.textContent = "Carregando snapshot…";
+    closeDialog(rosterDialog);
+    showDialog(importReviewDialog);
+    const response = await request(`/api/admin/characters/${character.id}/import`);
+    if (requestId !== reviewRequest || reviewCharacter?.id !== character.id) return;
+    if (!response.ok) {
+      importReviewContent.textContent = "Não foi possível carregar a reconstrução.";
+      return;
+    }
+    const state = await response.json();
+    reviewSnapshot = {
+      revision: state.revision,
+      hash: state.submitted_snapshot_hash,
+    };
+    const sheet = document.createElement("dl");
+    sheet.className = "review-facts";
+    const classes = character.class_progress.classes
+      .map((entry) => `${entry.definition.name} ${entry.levels}${entry.is_starting_class ? " (inicial)" : ""}`)
+      .join(" · ");
+    sheet.append(
+      reviewFact("Estado", reviewLabels[state.review_state]),
+      reviewFact("Classes", classes || "não informadas"),
+      reviewFact("Atributos", state.scores ? `FOR ${state.scores.strength} · DES ${state.scores.dexterity} · CON ${state.scores.constitution} · INT ${state.scores.intelligence} · SAB ${state.scores.wisdom} · CAR ${state.scores.charisma}` : "não informados"),
+      reviewFact("HP", state.hit_points.maximum_hp === null ? "não informado" : `${state.hit_points.current_hp}/${state.hit_points.maximum_hp} · ${state.hit_points.temporary_hp} temporário`),
+      reviewFact("Procedência", state.attestation || "não informada"),
+      reviewFact("Revisão", `snapshot ${state.revision}`),
+    );
+    importReviewContent.replaceChildren(sheet);
+    const pending = state.review_state === "pending";
+    importReviewForm.elements.note.disabled = !pending;
+    requestImportChanges.disabled = !pending;
+    document.querySelector("#approve-import").disabled = !pending;
+  }
+
+  async function sendImportReview(decision) {
+    if (!reviewCharacter || !reviewSnapshot) return;
+    importReviewError.hidden = true;
+    const note = importReviewForm.elements.note.value;
+    if (decision === "changes_requested" && !note.trim()) {
+      importReviewError.textContent = "Explique ao jogador o que precisa ser corrigido.";
+      importReviewError.hidden = false;
+      return;
+    }
+    const response = await request(`/api/admin/characters/${reviewCharacter.id}/import/review`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        decision,
+        note,
+        expected_revision: reviewSnapshot.revision,
+        expected_snapshot_hash: reviewSnapshot.hash,
+      }),
+    });
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      importReviewError.textContent = body.detail || "Não foi possível registrar a revisão.";
+      importReviewError.hidden = false;
+      return;
+    }
+    closeDialog(importReviewDialog);
+    if (currentCampaign) await openRosterDialog(currentCampaign);
+  }
+
   async function openRosterDialog(campaign) {
+    currentCampaign = campaign;
     rosterTitle.textContent = campaign.name;
     rosterList.textContent = "Carregando personagens…";
     showDialog(rosterDialog);
@@ -166,10 +257,19 @@
         meta.className = "meta";
         const progress = character.ability_score_progress;
         const assigned = progress.status === "in_progress" ? ` (${progress.assigned_count}/6)` : "";
-        meta.textContent = `nível ${character.level} · ${statusLabels[character.status]} · atributos ${creationLabels[progress.status]}${assigned}`;
+        meta.textContent = character.creation_mode === "manual_import"
+          ? `nível ${character.level} · ${statusLabels[character.status]} · importação ${reviewLabels[character.import_review_state]}`
+          : `nível ${character.level} · ${statusLabels[character.status]} · classe ${creationLabels[character.class_progress.status]} · atributos ${creationLabels[progress.status]}${assigned}`;
         summary.append(name, meta);
         const actions = document.createElement("div");
         actions.className = "actions";
+        if (character.creation_mode === "manual_import") {
+          actions.append(actionButton(
+            character.import_review_state === "pending" ? "revisar importação" : "ver importação",
+            () => openImportReview(character),
+            character.import_review_state === "pending" ? "primary" : "",
+          ));
+        }
         if (character.status === "dead") {
           actions.append(actionButton("reverter morte", async () => {
             const changed = await request(`/api/admin/characters/${character.id}/restore`, { method: "POST" });
@@ -281,7 +381,7 @@
     showDialog(createDialog);
   });
 
-  for (const dialog of [createDialog, membersDialog, settingsDialog, lifecycleDialog, rosterDialog]) {
+  for (const dialog of [createDialog, membersDialog, settingsDialog, lifecycleDialog, rosterDialog, importReviewDialog]) {
     dialog.addEventListener("click", (event) => {
       if (event.target === dialog) closeDialog(dialog);
     });
@@ -289,6 +389,12 @@
       button.addEventListener("click", () => closeDialog(dialog));
     }
   }
+
+  importReviewForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    await sendImportReview("approved");
+  });
+  requestImportChanges.addEventListener("click", () => sendImportReview("changes_requested"));
 
   form.addEventListener("submit", async (event) => {
     event.preventDefault();

@@ -9,6 +9,12 @@ from pydantic import BaseModel, Field, model_validator, field_validator
 
 from loremaster.models.ability_scores import AbilityScoreProgressPublic
 from loremaster.models.campaign import CampaignLifecycle, RulePackPublic
+from loremaster.models.character_creation import (
+    CharacterClassesPublic,
+    CreationMode,
+    HitPointsPublic,
+    ImportReviewState,
+)
 
 
 class CharacterStatus(StrEnum):
@@ -37,8 +43,12 @@ class CharacterVersionPublic(BaseModel):
     campaign: CharacterCampaignSummary
     status: CharacterStatus
     level: int
+    creation_mode: CreationMode
     source_version_id: str | None
     ability_score_progress: AbilityScoreProgressPublic
+    class_progress: CharacterClassesPublic
+    hit_point_progress: HitPointsPublic
+    import_review_state: ImportReviewState
     created_at: datetime
     updated_at: datetime
 
@@ -52,6 +62,8 @@ class CharacterIdentityPublic(CharacterIdentitySummary):
 class CreateCharacterRequest(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=200)
     identity_id: str | None = None
+    creation_mode: CreationMode = CreationMode.NEW_CHARACTER
+    level: int | None = Field(default=None, ge=1, le=20)
 
     @field_validator("name")
     @classmethod
@@ -67,6 +79,10 @@ class CreateCharacterRequest(BaseModel):
     def require_exactly_one_source(self):
         if (self.name is None) == (self.identity_id is None):
             raise ValueError("provide either name or identity_id")
+        if self.creation_mode == CreationMode.MANUAL_IMPORT and self.level is None:
+            raise ValueError("manual imports require the character's current level")
+        if self.creation_mode == CreationMode.NEW_CHARACTER and self.level is not None:
+            raise ValueError("new characters use the campaign starting level")
         return self
 
 

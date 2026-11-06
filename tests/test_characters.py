@@ -39,6 +39,22 @@ def _create_campaign(client, name: str, member_ids: list[str], *, level: int = 1
 
 
 def _complete_standard_array(client, version_id: str) -> dict:
+    version = next(
+        row for row in client.get("/api/player/characters").json() if row["id"] == version_id
+    )
+    classes = client.put(
+        f"/api/player/characters/{version_id}/creator/classes",
+        json={
+            "classes": [
+                {
+                    "class_key": "fighter",
+                    "levels": version["level"],
+                    "is_starting_class": True,
+                }
+            ]
+        },
+    )
+    assert classes.status_code == 200, classes.text
     saved = client.put(
         f"/api/player/characters/{version_id}/creator/ability-scores",
         json={
@@ -81,7 +97,7 @@ def test_player_creates_versions_at_campaign_level_and_only_one_can_be_active(ra
 
     premature = raw_client.post(f"/api/player/characters/{arthur['id']}/activate")
     assert premature.status_code == 409
-    assert premature.json()["detail"] == "complete ability scores before activating the character"
+    assert premature.json()["detail"] == "complete the class step before activating the character"
     _complete_standard_array(raw_client, arthur["id"])
     activated = raw_client.post(f"/api/player/characters/{arthur['id']}/activate")
     assert activated.status_code == 200

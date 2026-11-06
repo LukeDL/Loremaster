@@ -19,6 +19,12 @@ from loremaster.models.character import (
     CharacterStatus,
     CharacterVersionPublic,
 )
+from loremaster.models.character_creation import CreationMode, ImportReviewState
+from loremaster.models.character_creation_repository import (
+    public_class_progress,
+    public_hit_points,
+    review_state,
+)
 from loremaster.models.campaign_repository import public_rule_pack
 from loremaster.models.db import (
     CampaignMemberRow,
@@ -29,10 +35,19 @@ from loremaster.models.db import (
 
 
 def _version_query():
-    return select(CharacterVersionRow).options(
-        selectinload(CharacterVersionRow.identity),
-        selectinload(CharacterVersionRow.campaign).selectinload(CampaignRow.rule_pack),
-        selectinload(CharacterVersionRow.ability_scores),
+    return (
+        select(CharacterVersionRow)
+        .options(
+            selectinload(CharacterVersionRow.identity),
+            selectinload(CharacterVersionRow.campaign).selectinload(CampaignRow.rule_pack),
+            selectinload(CharacterVersionRow.ability_scores),
+            selectinload(CharacterVersionRow.creation_state),
+            selectinload(CharacterVersionRow.class_levels),
+            selectinload(CharacterVersionRow.imported_ability_scores),
+            selectinload(CharacterVersionRow.hit_points),
+            selectinload(CharacterVersionRow.import_reviews),
+        )
+        .execution_options(populate_existing=True)
     )
 
 
@@ -53,8 +68,12 @@ def public_version(row: CharacterVersionRow) -> CharacterVersionPublic:
         campaign=public_campaign_summary(row.campaign),
         status=CharacterStatus(row.status),
         level=row.level,
+        creation_mode=CreationMode(row.creation_mode),
         source_version_id=row.source_version_id,
         ability_score_progress=public_ability_progress(row.ability_scores),
+        class_progress=public_class_progress(row),
+        hit_point_progress=public_hit_points(row.hit_points),
+        import_review_state=review_state(row),
         created_at=row.created_at,
         updated_at=row.updated_at,
     )
@@ -162,6 +181,8 @@ async def create_campaign_version(
     campaign: CampaignRow,
     name: str | None,
     identity_id: str | None,
+    creation_mode: CreationMode = CreationMode.NEW_CHARACTER,
+    level: int | None = None,
 ) -> CharacterVersionRow:
     count = await sess.scalar(
         select(func.count()).select_from(CharacterVersionRow).where(
@@ -171,6 +192,11 @@ async def create_campaign_version(
     )
     if int(count or 0) >= campaign.max_characters_per_player:
         raise ValueError("campaign character limit reached")
+    if creation_mode == CreationMode.MANUAL_IMPORT and campaign.lifecycle != "in_progress":
+        raise ValueError("manual imports are available only for campaigns in progress")
+    if creation_mode == CreationMode.MANUAL_IMPORT and level is None:
+        raise ValueError("manual imports require the character's current level")
+    version_level = campaign.starting_level if creation_mode == CreationMode.NEW_CHARACTER else level
 
     now = utcnow()
     source_version_id: str | None = None
@@ -210,7 +236,8 @@ async def create_campaign_version(
         campaign_id=campaign.id,
         source_version_id=source_version_id,
         status=CharacterStatus.DRAFT.value,
-        level=campaign.starting_level,
+        level=version_level,
+        creation_mode=creation_mode.value,
         created_at=now,
         updated_at=now,
     )
@@ -241,8 +268,16 @@ async def set_owned_version_status(
     if target == CharacterStatus.ACTIVE:
         if current != CharacterStatus.DRAFT:
             raise ValueError("only draft characters can be activated")
-        if row.ability_scores is None or row.ability_scores.completed_at is None:
-            raise ValueError("complete ability scores before activating the character")
+        if row.creation_mode == CreationMode.MANUAL_IMPORT.value:
+            if review_state(row) != ImportReviewState.APPROVED:
+                raise ValueError("the imported character must be approved before activation")
+        else:
+            if row.creation_state is None or row.creation_state.class_completed_at is None:
+                raise ValueError("complete the class step before activating the character")
+            if row.ability_scores is None or row.ability_scores.completed_at is None:
+                raise ValueError("complete ability scores before activating the character")
+            if row.hit_points is None or row.hit_points.completed_at is None:
+                raise ValueError("complete hit points before activating the character")
         existing = await sess.scalar(
             select(CharacterVersionRow.id).where(
                 CharacterVersionRow.campaign_id == row.campaign_id,

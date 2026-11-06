@@ -104,6 +104,11 @@ async def test_fresh_database_records_all_migrations_and_enables_foreign_keys(tm
         "character_identities",
         "character_versions",
         "character_ability_scores",
+        "character_creation_states",
+        "character_class_levels",
+        "character_imported_ability_scores",
+        "character_hit_points",
+        "character_import_reviews",
     } <= tables
 
 
@@ -136,7 +141,9 @@ async def test_legacy_database_is_backed_up_and_migrated_without_data_loss(tmp_p
                 "SELECT name FROM sqlite_master WHERE type='table' "
                 "AND name IN ('users', 'sessions', 'rule_packs', 'campaigns', "
                 "'campaign_members', 'character_identities', 'character_versions', "
-                "'character_ability_scores')"
+                "'character_ability_scores', 'character_creation_states', "
+                "'character_class_levels', 'character_imported_ability_scores', "
+                "'character_hit_points', 'character_import_reviews')"
             )
         }
         campaign_columns = {
@@ -165,8 +172,22 @@ async def test_legacy_database_is_backed_up_and_migrated_without_data_loss(tmp_p
         "character_identities",
         "character_versions",
         "character_ability_scores",
+        "character_creation_states",
+        "character_class_levels",
+        "character_imported_ability_scores",
+        "character_hit_points",
+        "character_import_reviews",
     }
     assert {"starting_level", "lifecycle", "started_at", "completed_at"} <= campaign_columns
+    with sqlite3.connect(db_path) as connection:
+        version_columns = {
+            row[1] for row in connection.execute("PRAGMA table_info(character_versions)")
+        }
+        review_columns = {
+            row[1] for row in connection.execute("PRAGMA table_info(character_import_reviews)")
+        }
+    assert "creation_mode" in version_columns
+    assert {"snapshot_json", "snapshot_hash"} <= review_columns
     assert rule_pack == ("dnd5e-2024-srd-5.2.1", "2024", "5.2.1", "CC-BY-4.0")
     backups = list((tmp_path / "backups").glob("legacy-pre-migration-*.db"))
     assert len(backups) == 1
