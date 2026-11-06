@@ -188,6 +188,9 @@ async def test_legacy_database_is_backed_up_and_migrated_without_data_loss(tmp_p
         }
     assert "creation_mode" in version_columns
     assert {"snapshot_json", "snapshot_hash"} <= review_columns
+    with sqlite3.connect(db_path) as connection:
+        user_columns = {row[1] for row in connection.execute("PRAGMA table_info(users)")}
+    assert "selected_campaign_id" in user_columns
     assert rule_pack == ("dnd5e-2024-srd-5.2.1", "2024", "5.2.1", "CC-BY-4.0")
     backups = list((tmp_path / "backups").glob("legacy-pre-migration-*.db"))
     assert len(backups) == 1

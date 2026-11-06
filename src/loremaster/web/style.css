@@ -1029,10 +1029,38 @@ nav.tabs button:hover:not(.active) {
 }
 .class-level-row label { display: grid; gap: 6px; }
 .class-level-row select,
-.class-level-row input,
+.class-level-row input[type="number"],
 .import-stat-grid input,
-.import-hp-grid input { width: 100%; }
-.class-level-row .class-starting { display: flex; align-items: center; min-height: 42px; }
+.import-hp-grid input {
+  width: 100%;
+  min-height: 42px;
+  padding: 9px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  background: var(--bg);
+  font: inherit;
+  color-scheme: dark;
+}
+.class-level-row select:focus,
+.class-level-row input[type="number"]:focus,
+.import-stat-grid input:focus,
+.import-hp-grid input:focus { outline: none; border-color: var(--accent); }
+.class-level-row .class-starting { display: flex; align-items: center; gap: 8px; min-height: 42px; }
+.class-level-row .class-starting input { width: 18px; height: 18px; accent-color: var(--accent); }
+.campaign-picker { display: flex; align-items: center; gap: 10px; color: var(--muted); }
+.campaign-picker[hidden] { display: none; }
+.campaign-picker select {
+  width: min(220px, 100%);
+  min-width: 0;
+  padding: 9px 34px 9px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  background: var(--bg);
+  font: inherit;
+  color-scheme: dark;
+}
 .class-facts { grid-column: 1 / -1; }
 .import-stat-grid,
 .import-hp-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 18px 0; }
@@ -1064,4 +1092,5 @@ nav.tabs button:hover:not(.active) {
   .class-facts { grid-column: auto; }
   .import-stat-grid, .import-hp-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .review-facts > div { grid-template-columns: 1fr; gap: 4px; }
+  .campaign-picker { display: grid; gap: 6px; }
 }

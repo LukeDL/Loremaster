@@ -180,6 +180,14 @@ async def set_campaign_members(
     member_ids: list[str],
 ) -> CampaignRow:
     now = utcnow()
+    await sess.execute(
+        update(UserRow)
+        .where(
+            UserRow.selected_campaign_id == row.id,
+            UserRow.id.not_in(member_ids),
+        )
+        .values(selected_campaign_id=None, updated_at=now)
+    )
     await sess.execute(delete(CampaignMemberRow).where(CampaignMemberRow.campaign_id == row.id))
     for user_id in member_ids:
         sess.add(CampaignMemberRow(campaign_id=row.id, user_id=user_id, added_at=now))

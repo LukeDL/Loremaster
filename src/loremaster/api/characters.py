@@ -25,6 +25,7 @@ from loremaster.models.character import (
     CharacterVersionPublic,
     CreateCharacterRequest,
     RenameCharacterIdentityRequest,
+    SelectPlayerCampaignRequest,
 )
 from loremaster.models.character_creation import (
     CLASS_CATALOG,
@@ -53,10 +54,12 @@ from loremaster.models.character_repository import (
     get_selected_campaign_for_player,
     get_version,
     list_player_identities,
+    list_player_campaigns,
     list_player_versions,
     public_campaign_summary,
     public_version,
     rename_owned_identity,
+    select_player_campaign,
     set_gm_version_status,
     set_owned_version_status,
 )
@@ -133,6 +136,30 @@ async def selected_campaign(
     _require_player(context)
     campaign = await _selected_campaign_or_404(sess, context.user.id)
     return public_campaign_summary(campaign)
+
+
+@player_router.get("/campaigns", response_model=list[CharacterCampaignSummary])
+async def player_campaigns(
+    context: AuthContext = Depends(require_authenticated),
+    sess: AsyncSession = Depends(db_session),
+) -> list[CharacterCampaignSummary]:
+    _require_player(context)
+    rows = await list_player_campaigns(sess, context.user.id)
+    return [public_campaign_summary(row) for row in rows]
+
+
+@player_router.put("/campaign", response_model=CharacterCampaignSummary)
+async def choose_player_campaign(
+    payload: SelectPlayerCampaignRequest,
+    context: AuthContext = Depends(require_authenticated),
+    sess: AsyncSession = Depends(db_session),
+) -> CharacterCampaignSummary:
+    _require_player(context)
+    try:
+        row = await select_player_campaign(sess, context.user.id, payload)
+    except LookupError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
+    return public_campaign_summary(row)
 
 
 @player_router.get("/characters", response_model=list[CharacterVersionPublic])
