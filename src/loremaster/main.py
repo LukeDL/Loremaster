@@ -10,7 +10,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-from loremaster.api import auth, campaigns, playback, scenes, uploads, users
+from loremaster.api import auth, campaigns, characters, playback, scenes, uploads, users
 from loremaster.api.deps import get_auth_context
 from loremaster.api.ws import WsBroadcaster, router as ws_router
 from loremaster.audio.engine import AudioEngine
@@ -89,6 +89,8 @@ def create_app(lifespan_context=lifespan) -> FastAPI:
     app.include_router(auth.router)
     app.include_router(users.router)
     app.include_router(campaigns.router)
+    app.include_router(characters.player_router)
+    app.include_router(characters.admin_router)
     app.include_router(uploads.router)
     app.include_router(scenes.router)
     app.include_router(scenes.singletons_router)

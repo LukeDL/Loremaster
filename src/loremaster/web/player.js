@@ -1,0 +1,252 @@
+(() => {
+  const campaignLabel = document.querySelector("#selected-campaign");
+  const list = document.querySelector("#characters-list");
+  const notice = document.querySelector("#player-notice");
+  const openCreateButton = document.querySelector("#open-create-character");
+  const createDialog = document.querySelector("#create-character-dialog");
+  const createForm = document.querySelector("#create-character");
+  const createError = document.querySelector("#create-character-error");
+  const newNameLabel = document.querySelector("#new-character-name");
+  const existingPicker = document.querySelector("#existing-character-picker");
+  const identitySelect = createForm.elements.identity_id;
+  const renameDialog = document.querySelector("#rename-character-dialog");
+  const renameForm = document.querySelector("#rename-character");
+  const renameError = document.querySelector("#rename-character-error");
+  const statusDialog = document.querySelector("#character-status-dialog");
+  const statusForm = document.querySelector("#character-status-form");
+  const statusTitle = document.querySelector("#character-status-title");
+  const statusDescription = document.querySelector("#character-status-description");
+  const statusConfirm = document.querySelector("#character-status-confirm");
+  const statusError = document.querySelector("#character-status-error");
+  let campaign = null;
+  let identities = [];
+  let selectedCharacter = null;
+  let statusAction = null;
+  let noticeTimer = null;
+
+  const lifecycleLabels = { planning: "planejamento", in_progress: "em andamento", completed: "concluída" };
+  const statusLabels = { draft: "rascunho", active: "ativo", dead: "morto", retired: "retirado" };
+
+  function showDialog(dialog) {
+    if (typeof dialog.showModal === "function") dialog.showModal();
+    else dialog.setAttribute("open", "");
+  }
+
+  function closeDialog(dialog) {
+    if (typeof dialog.close === "function") dialog.close();
+    else dialog.removeAttribute("open");
+  }
+
+  function showNotice(message) {
+    window.clearTimeout(noticeTimer);
+    notice.textContent = message;
+    notice.hidden = false;
+    noticeTimer = window.setTimeout(() => { notice.hidden = true; }, 5000);
+  }
+
+  function button(label, action, className = "") {
+    const element = document.createElement("button");
+    element.type = "button";
+    element.textContent = label;
+    element.className = className;
+    element.addEventListener("click", action);
+    return element;
+  }
+
+  function setSourceFields() {
+    const source = createForm.elements.source.value;
+    const isNew = source === "new";
+    newNameLabel.hidden = !isNew;
+    existingPicker.hidden = isNew;
+    createForm.elements.name.required = isNew;
+    identitySelect.required = !isNew;
+  }
+
+  function openRename(character) {
+    selectedCharacter = character;
+    renameError.hidden = true;
+    renameForm.elements.name.value = character.identity.name;
+    showDialog(renameDialog);
+  }
+
+  function openStatus(character, action) {
+    selectedCharacter = character;
+    statusAction = action;
+    statusError.hidden = true;
+    if (action === "activate") {
+      statusTitle.textContent = `Ativar ${character.identity.name}`;
+      statusDescription.textContent = "Este será seu único personagem ativo na campanha.";
+      statusConfirm.textContent = "ativar personagem";
+    } else {
+      statusTitle.textContent = `Retirar ${character.identity.name}`;
+      statusDescription.textContent = "O personagem permanecerá preservado nesta campanha, mas ficará retirado.";
+      statusConfirm.textContent = "retirar personagem";
+    }
+    showDialog(statusDialog);
+  }
+
+  function renderCharacters(characters) {
+    list.replaceChildren();
+    if (!characters.length) {
+      const empty = document.createElement("div");
+      empty.className = "empty-state";
+      empty.textContent = "Nenhum personagem nesta campanha. Crie seu primeiro rascunho.";
+      list.append(empty);
+      return;
+    }
+    for (const character of characters) {
+      const card = document.createElement("article");
+      card.className = `campaign-card character-card status-${character.status}`;
+      const heading = document.createElement("div");
+      heading.className = "campaign-heading";
+      const title = document.createElement("strong");
+      title.textContent = character.identity.name;
+      const badge = document.createElement("span");
+      badge.className = `campaign-status character-status-${character.status}`;
+      badge.textContent = statusLabels[character.status];
+      heading.append(title, badge);
+      const summary = document.createElement("div");
+      summary.className = "campaign-summary";
+      const level = document.createElement("div");
+      level.className = "campaign-stat";
+      level.innerHTML = `<span>Nível</span><strong>${character.level}</strong>`;
+      const rules = document.createElement("div");
+      rules.className = "campaign-stat";
+      const rulesLabel = document.createElement("span");
+      rulesLabel.textContent = "Regras";
+      const rulesValue = document.createElement("strong");
+      rulesValue.textContent = `${character.campaign.rule_pack.name} · v${character.campaign.rule_pack.version}`;
+      rules.append(rulesLabel, rulesValue);
+      summary.append(level, rules);
+      const actions = document.createElement("div");
+      actions.className = "actions";
+      actions.append(button("renomear identidade", () => openRename(character)));
+      if (character.status === "draft") {
+        actions.append(button("ativar", () => openStatus(character, "activate"), "primary"));
+      }
+      if (character.status === "draft" || character.status === "active") {
+        actions.append(button("retirar", () => openStatus(character, "retire")));
+      }
+      card.append(heading, summary, actions);
+      list.append(card);
+    }
+  }
+
+  async function load() {
+    const [campaignResponse, charactersResponse, identitiesResponse] = await Promise.all([
+      fetch("/api/player/campaign"),
+      fetch("/api/player/characters"),
+      fetch("/api/player/character-identities"),
+    ]);
+    if (campaignResponse.status === 404) {
+      campaignLabel.textContent = "Você ainda não faz parte da campanha selecionada pelo Mestre.";
+      list.innerHTML = '<div class="empty-state">Peça ao Mestre para associar sua conta a uma campanha selecionada.</div>';
+      openCreateButton.disabled = true;
+      return;
+    }
+    if (!campaignResponse.ok || !charactersResponse.ok || !identitiesResponse.ok) {
+      throw new Error("Não foi possível carregar seus personagens.");
+    }
+    campaign = await campaignResponse.json();
+    const characters = await charactersResponse.json();
+    identities = await identitiesResponse.json();
+    campaignLabel.textContent = `${campaign.name} · nível inicial ${campaign.starting_level} · ${lifecycleLabels[campaign.lifecycle]}`;
+    renderCharacters(characters);
+    openCreateButton.disabled = false;
+  }
+
+  openCreateButton.addEventListener("click", () => {
+    createForm.reset();
+    createError.hidden = true;
+    identitySelect.replaceChildren();
+    const usedHere = new Set(
+      identities.flatMap((identity) => identity.versions)
+        .filter((version) => version.campaign.id === campaign.id)
+        .map((version) => version.identity.id),
+    );
+    for (const identity of identities.filter((item) => !usedHere.has(item.id))) {
+      const option = document.createElement("option");
+      option.value = identity.id;
+      option.textContent = identity.name;
+      identitySelect.append(option);
+    }
+    const existingRadio = createForm.querySelector('input[value="existing"]');
+    existingRadio.disabled = !identitySelect.options.length;
+    setSourceFields();
+    showDialog(createDialog);
+  });
+
+  for (const radio of createForm.elements.source) radio.addEventListener("change", setSourceFields);
+  for (const dialog of [createDialog, renameDialog, statusDialog]) {
+    dialog.addEventListener("click", (event) => {
+      if (event.target === dialog) closeDialog(dialog);
+    });
+    for (const closeButton of dialog.querySelectorAll("[data-close-dialog]")) {
+      closeButton.addEventListener("click", () => closeDialog(dialog));
+    }
+  }
+
+  createForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    createError.hidden = true;
+    const data = new FormData(createForm);
+    const payload = data.get("source") === "new"
+      ? { name: data.get("name") }
+      : { identity_id: data.get("identity_id") };
+    const response = await fetch("/api/player/characters", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) {
+      createError.textContent = response.status === 409
+        ? "O limite da campanha foi atingido ou essa identidade já participa dela."
+        : "Não foi possível criar o personagem.";
+      createError.hidden = false;
+      return;
+    }
+    closeDialog(createDialog);
+    showNotice("Rascunho criado no nível inicial da campanha.");
+    await load();
+  });
+
+  renameForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    renameError.hidden = true;
+    if (!selectedCharacter) return;
+    const response = await fetch(`/api/player/character-identities/${selectedCharacter.identity.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: new FormData(renameForm).get("name") }),
+    });
+    if (!response.ok) {
+      renameError.textContent = "Não foi possível renomear o personagem.";
+      renameError.hidden = false;
+      return;
+    }
+    closeDialog(renameDialog);
+    showNotice("Identidade atualizada em todas as campanhas.");
+    await load();
+  });
+
+  statusForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    statusError.hidden = true;
+    if (!selectedCharacter || !statusAction) return;
+    const response = await fetch(`/api/player/characters/${selectedCharacter.id}/${statusAction}`, { method: "POST" });
+    if (!response.ok) {
+      statusError.textContent = response.status === 409
+        ? "Essa mudança de estado não é permitida ou já existe outro personagem ativo."
+        : "Não foi possível alterar o estado.";
+      statusError.hidden = false;
+      return;
+    }
+    closeDialog(statusDialog);
+    showNotice(statusAction === "activate" ? "Personagem ativado." : "Personagem retirado.");
+    await load();
+  });
+
+  load().catch((reason) => {
+    campaignLabel.textContent = reason.message || "Não foi possível carregar a área do jogador.";
+  });
+})();
