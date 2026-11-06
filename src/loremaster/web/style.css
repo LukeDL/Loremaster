@@ -888,7 +888,7 @@ nav.tabs button:hover:not(.active) {
 }
 .creator-progress {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 10px;
   margin-bottom: 22px;
 }
@@ -970,6 +970,7 @@ nav.tabs button:hover:not(.active) {
   border-radius: 10px;
   background: var(--panel-2);
 }
+.ability-row.invalid { border-color: var(--danger); }
 .ability-name { font-weight: 600; }
 .ability-row select {
   width: 100%;
@@ -980,6 +981,30 @@ nav.tabs button:hover:not(.active) {
   background: var(--bg);
 }
 .ability-modifier { text-align: center; color: var(--accent); font-size: 18px; font-weight: 700; }
+.point-buy-row { grid-template-columns: minmax(120px, 1fr) 52px minmax(150px, auto); }
+.score-stepper {
+  display: grid;
+  grid-template-columns: 42px minmax(48px, 1fr) 42px;
+  gap: 8px;
+  align-items: center;
+}
+.score-stepper-button {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  border-radius: 999px;
+  font-size: 22px;
+  line-height: 1;
+}
+.ability-value {
+  min-width: 48px;
+  text-align: center;
+  font-size: 24px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
 .creator-summary { align-self: start; position: sticky; top: 18px; }
 .creator-summary dl { display: grid; gap: 10px; margin: 18px 0; }
 .creator-summary dl > div { display: flex; justify-content: space-between; gap: 14px; }
@@ -988,6 +1013,10 @@ nav.tabs button:hover:not(.active) {
 .creator-actions { display: grid; gap: 10px; }
 .srd-attribution { max-width: 820px; color: var(--muted); font-size: 11px; line-height: 1.5; margin: 24px 0 0; }
 .srd-attribution a { color: var(--accent); }
+
+@media (max-width: 980px) {
+  .creator-progress { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
 
 @media (max-width: 760px) {
   .creator-header { align-items: flex-start; gap: 14px; padding: 16px; }
@@ -999,4 +1028,5 @@ nav.tabs button:hover:not(.active) {
   .creator-summary { position: static; }
   .score-heading { display: grid; }
   .ability-row { grid-template-columns: 1fr 110px 42px; }
+  .point-buy-row { grid-template-columns: minmax(90px, 1fr) 42px minmax(142px, auto); }
 }
